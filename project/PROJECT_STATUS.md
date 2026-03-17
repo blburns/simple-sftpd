@@ -140,18 +140,14 @@ The Production Version has reached **87% completion** for v0.1.0 with:
 
 ## 🔄 Next Steps
 
-### Immediate Priorities (v0.1.0)
-1. **Expand Test Coverage**: Increase to 60%+
-2. **Performance Testing**: Load and stress testing
-3. **Documentation Polish**: Finalize all guides
-4. **Bug Fixes**: Address any issues found during testing
+### Immediate Priorities (v0.1.0 release)
+1. **Documentation** – Production guides complete (deployment, operations, performance, security, troubleshooting). See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+2. **Expand Test Coverage** (optional): Increase toward 60%+ for future releases.
+3. **Performance Testing** (optional): Load/stress testing for future releases.
 
-### Version 0.2.0 (Q2 2025)
-1. **SSL/TLS Implementation**: OpenSSL integration
-2. **Active Mode**: PORT command support
-3. **Persistent User Storage**: Database/file-based user management
-4. **Chroot Support**: Directory isolation
-5. **Performance Optimization**: Connection pooling, memory-mapped I/O
+### Version 0.2.0 (future)
+1. **Persistent User Storage**: Database/file-based user management
+2. **Performance Optimization**: Connection pooling, memory-mapped I/O
 
 ### Version 0.3.0 (Q3 2025)
 1. **Virtual Hosting**: Multi-domain support
@@ -170,11 +166,10 @@ The Production Version has reached **87% completion** for v0.1.0 with:
 - ✅ Complete CLI management
 - ✅ Security features implemented
 
-**Areas for Development**:
-- ⚠️ SSL/TLS implementation (v0.2.0)
-- ⚠️ Test coverage expansion
-- ⚠️ Performance optimization
-- ⚠️ Active mode support (v0.2.0)
+**Areas for Development** (future):
+- ⚠️ Test coverage expansion (toward 60%+)
+- ⚠️ User persistence (v0.2.0)
+- ⚠️ Performance optimization (connection pooling, etc.)
 
 ## 🎯 Success Criteria
 
@@ -189,7 +184,7 @@ The project has successfully achieved its primary goals for v0.1.0:
 
 ## 🚀 Ready for Release
 
-The Simple FTP Daemon project is now **85% complete** for v0.1.0 with:
+The Simple FTP Daemon project is **ready for production release** (v0.1.0) with:
 - A working FTP server with file transfers
 - Complete CLI management interface
 - Comprehensive test suite
@@ -197,9 +192,9 @@ The Simple FTP Daemon project is now **85% complete** for v0.1.0 with:
 - Professional documentation
 - Deployment automation
 
-**Next steps: Expand testing, performance validation, and final polish for v0.1.0 release.**
+**For release:** Use [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Production documentation (deployment, operations, performance, security, troubleshooting) is in place for v0.1.0.
 
 ---
 
-*Last Updated: January 2025*  
-*Project Status: Production Version 87% Complete - Ready for Final Testing*
+*Last Updated: March 2025*  
+*Project Status: Production Version – Ready for Release (v0.1.0)*
