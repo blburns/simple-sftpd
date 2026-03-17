@@ -22,6 +22,7 @@ INVENTORY_FILE="${ANSIBLE_DIR}/inventory-vmware.ini"
 PLAYBOOK="${ANSIBLE_DIR}/playbook-build.yml"
 GIT_BRANCH="main"
 BUILD_TYPE="Release"
+BUILD_VERSION="production"
 CLEAN_BUILD=false
 RUN_TESTS=true
 CREATE_PACKAGES=false
@@ -57,6 +58,7 @@ OPTIONS:
     -i, --inventory FILE    Path to Ansible inventory file (default: inventory-vmware.ini)
     -b, --branch BRANCH     Git branch to build (default: main)
     -t, --type TYPE         Build type: Release or Debug (default: Release)
+    -v, --version VERSION   Product version: production, enterprise, datacenter (default: production)
     -c, --clean             Clean build directory before building
     -l, --limit HOSTS       Limit to specific hosts (comma-separated, e.g., vm1,vm2)
     --no-tests              Skip running tests
@@ -65,7 +67,9 @@ OPTIONS:
     --list-hosts            List available hosts and exit
 
 EXAMPLES:
-    $0                                    # Build on all VMs
+    $0                                    # Build production version on all VMs
+    $0 -v enterprise                      # Build enterprise version
+    $0 -v datacenter --packages           # Build datacenter version with packages
     $0 -l BUILD_DEB                       # Build only on BUILD_DEB
     $0 -b develop -t Debug                 # Build develop branch in Debug mode
     $0 -c --packages                       # Clean build and create packages
@@ -134,6 +138,7 @@ run_build() {
     print_status "Playbook: $PLAYBOOK"
     print_status "Branch: $GIT_BRANCH"
     print_status "Build type: $BUILD_TYPE"
+    print_status "Product version: $BUILD_VERSION"
     print_status "Clean build: $CLEAN_BUILD"
     print_status "Run tests: $RUN_TESTS"
     print_status "Create packages: $CREATE_PACKAGES"
@@ -150,6 +155,7 @@ run_build() {
     # Add extra variables
     ANSIBLE_CMD="$ANSIBLE_CMD -e git_branch=$GIT_BRANCH"
     ANSIBLE_CMD="$ANSIBLE_CMD -e build_type=$BUILD_TYPE"
+    ANSIBLE_CMD="$ANSIBLE_CMD -e build_version=$BUILD_VERSION"
     ANSIBLE_CMD="$ANSIBLE_CMD -e clean_build=$CLEAN_BUILD"
     ANSIBLE_CMD="$ANSIBLE_CMD -e run_tests=$RUN_TESTS"
     ANSIBLE_CMD="$ANSIBLE_CMD -e create_packages=$CREATE_PACKAGES"
@@ -190,6 +196,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         -t|--type)
             BUILD_TYPE="$2"
+            shift 2
+            ;;
+        -v|--version)
+            BUILD_VERSION="$2"
+            # Validate version
+            if [[ "$BUILD_VERSION" != "production" && "$BUILD_VERSION" != "enterprise" && "$BUILD_VERSION" != "datacenter" ]]; then
+                print_error "Invalid product version: $BUILD_VERSION"
+                print_error "Must be one of: production, enterprise, datacenter"
+                exit 1
+            fi
             shift 2
             ;;
         -c|--clean)

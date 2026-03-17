@@ -28,7 +28,7 @@ class Logger;
 
 class FTPUserManager {
 public:
-    explicit FTPUserManager(std::shared_ptr<Logger> logger);
+    explicit FTPUserManager(std::shared_ptr<Logger> logger, const std::string& user_file = "");
     ~FTPUserManager() = default;
 
     bool addUser(std::shared_ptr<FTPUser> user);
@@ -38,10 +38,17 @@ public:
     bool authenticateUser(const std::string& username, const std::string& password);
     std::vector<std::string> listUsers() const;
 
+    // User persistence
+    bool loadUsers(const std::string& filename = "");
+    bool saveUsers(const std::string& filename = "") const;
+    void setUserFile(const std::string& filename);
+    std::string getUserFile() const { return user_file_; }
+
 private:
     std::shared_ptr<Logger> logger_;
     mutable std::mutex users_mutex_;
     std::map<std::string, std::shared_ptr<FTPUser>> users_;
+    std::string user_file_;
 };
 
 } // namespace simple_sftpd

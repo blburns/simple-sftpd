@@ -142,9 +142,11 @@ RUN useradd -r -s /bin/false simple-sftpd
 RUN mkdir -p /var/ftp/pub /var/ftp/incoming /var/ftp/outgoing \
     && chown -R simple-sftpd:simple-sftpd /var/ftp
 
-# Copy binary from builder
-COPY --from=ubuntu-builder /app/build/bin/simple-sftpd /usr/local/bin/
+# Copy binary from builder (CMake default puts executable in build/)
+COPY --from=ubuntu-builder /app/build/simple-sftpd /usr/local/bin/simple-sftpd
 COPY --from=ubuntu-builder /app/config/ /etc/simple-sftpd/
+# Default config: use simple config as simple-sftpd.conf for CMD
+RUN cp /etc/simple-sftpd/simple/simple-sftpd.conf /etc/simple-sftpd/simple-sftpd.conf
 
 # Set ownership
 RUN chown -R simple-sftpd:simple-sftpd /etc/simple-sftpd

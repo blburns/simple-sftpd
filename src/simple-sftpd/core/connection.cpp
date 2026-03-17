@@ -40,6 +40,7 @@
 #include <thread>
 #ifndef _WIN32
 #include <pwd.h>
+#include <unistd.h>
 #endif
 
 namespace simple_sftpd {
@@ -50,14 +51,30 @@ FTPConnection::FTPConnection(int socket, std::shared_ptr<Logger> logger, std::sh
       ssl_enabled_(false), ssl_active_(false), ssl_(nullptr), data_ssl_(nullptr),
       passive_listen_socket_(-1), data_socket_(-1), transfer_type_("A"), protection_level_("C"),
       active_mode_port_(0), active_mode_enabled_(false), resume_position_(0) {
-    user_manager_ = std::make_shared<FTPUserManager>(logger_);
+    // Determine user file path
+    std::string user_file;
+    #ifdef _WIN32
+    user_file = "C:\\Program Files\\simple-sftpd\\users.json";
+    #else
+    user_file = "/etc/simple-sftpd/users.json";
+    // Fallback to local directory if /etc is not writable
+    if (!std::filesystem::exists("/etc/simple-sftpd") && 
+        access("/etc/simple-sftpd", W_OK) != 0) {
+        const char* home = getenv("HOME");
+        user_file = std::string(home ? home : ".") + "/.simple-sftpd/users.json";
+    }
+    #endif
     
-    // Add default test user for development/testing
-    auto test_user = std::make_shared<FTPUser>("test", "test", "/tmp");
-    user_manager_->addUser(test_user);
+    user_manager_ = std::make_shared<FTPUserManager>(logger_, user_file);
     
-    // Add anonymous user if allowed
-    if (config->security.allow_anonymous) {
+    // Add default test user for development/testing (only if no users loaded)
+    if (user_manager_->listUsers().empty()) {
+        auto test_user = std::make_shared<FTPUser>("test", "test", "/tmp");
+        user_manager_->addUser(test_user);
+    }
+    
+    // Add anonymous user if allowed (only if not already exists)
+    if (config->security.allow_anonymous && !user_manager_->getUser("anonymous")) {
         auto anon_user = std::make_shared<FTPUser>("anonymous", "", "/tmp");
         user_manager_->addUser(anon_user);
     }

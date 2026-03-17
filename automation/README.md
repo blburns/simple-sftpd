@@ -2,6 +2,26 @@
 
 This directory contains all automation scripts and configuration files for setting up and managing the simple-sftpd development environment.
 
+## Product Versions
+
+The automation system supports building three product versions:
+- **Production** (default): Apache 2.0 licensed, basic features
+- **Enterprise**: BSL 1.1 licensed, includes production features plus enterprise features
+- **Datacenter**: BSL 1.1 licensed, includes all enterprise and production features plus datacenter features
+
+Build a specific version by setting the `build_version` variable:
+```bash
+ansible-playbook -i automation/ansible/inventory.ini automation/ansible/playbook-build.yml -e build_version=enterprise
+```
+
+Packages are organized by product version in `dist/centralized/v{VERSION}/{PRODUCT_VERSION}/`:
+- `dist/centralized/v0.1.0/production/` - Production packages
+- `dist/centralized/v0.1.0/enterprise/` - Enterprise packages
+- `dist/centralized/v0.1.0/datacenter/` - Datacenter packages
+
+Package naming format: `simple-sftpd-{version}-{product}-{platform}-{distro}-{arch}.{ext}`
+Example: `simple-sftpd-0.1.0-production-linux-debian-amd64.deb`
+
 ## Directory Structure
 
 ```

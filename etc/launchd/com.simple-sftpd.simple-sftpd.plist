@@ -9,7 +9,7 @@
     <array>
         <string>/usr/local/sbin/simple-sftpd</string>
         <string>--config</string>
-        <string>/usr/local/etc/simple-sftpd/deployment/simple-sftpd.conf</string>
+        <string>/usr/local/etc/simple-sftpd/simple-sftpd.conf</string>
     </array>
     
     <key>RunAtLoad</key>

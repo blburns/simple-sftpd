@@ -272,7 +272,7 @@ After=network.target
 Wants=network-online.target
 
 [Service]
-Type=notify
+Type=simple
 User=$FTP_USER
 Group=$FTP_GROUP
 ExecStart=$BINARY_PATH --config $CONFIG_FILE

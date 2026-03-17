@@ -27,6 +27,37 @@ option(ENABLE_JSON "Enable JSON support" ON)
 option(ENABLE_COMPRESSION "Enable compression support (gzip, bzip2)" ON)
 option(ENABLE_STATIC_LINKING "Enable static linking for self-contained binaries" OFF)
 
+# Product Version Selection
+# Options: production (default), enterprise, datacenter
+set(BUILD_VERSION "production" CACHE STRING "Product version to build (production, enterprise, datacenter)")
+set_property(CACHE BUILD_VERSION PROPERTY STRINGS production enterprise datacenter)
+
+# Validate BUILD_VERSION
+if(NOT BUILD_VERSION MATCHES "^(production|enterprise|datacenter)$")
+    message(FATAL_ERROR "BUILD_VERSION must be one of: production, enterprise, datacenter")
+endif()
+
+# Set version-specific defines and main source
+if(BUILD_VERSION STREQUAL "production")
+    set(PRODUCT_VERSION_NAME "production")
+    set(PRODUCT_VERSION_DISPLAY "Production")
+    set(MAIN_SOURCE "main/production.cpp")
+    add_definitions(-DSIMPLE_SFTPD_PRODUCTION)
+    message(STATUS "Building Production Version (Apache 2.0)")
+elseif(BUILD_VERSION STREQUAL "enterprise")
+    set(PRODUCT_VERSION_NAME "enterprise")
+    set(PRODUCT_VERSION_DISPLAY "Enterprise")
+    set(MAIN_SOURCE "main/enterprise.cpp")
+    add_definitions(-DSIMPLE_SFTPD_ENTERPRISE)
+    message(STATUS "Building Enterprise Version (BSL 1.1)")
+elseif(BUILD_VERSION STREQUAL "datacenter")
+    set(PRODUCT_VERSION_NAME "datacenter")
+    set(PRODUCT_VERSION_DISPLAY "Datacenter")
+    set(MAIN_SOURCE "main/datacenter.cpp")
+    add_definitions(-DSIMPLE_SFTPD_DATACENTER)
+    message(STATUS "Building Datacenter Version (BSL 1.1)")
+endif()
+
 # Find required packages
 find_package(Threads REQUIRED)
 
@@ -58,12 +89,22 @@ file(GLOB_RECURSE SOURCES
     "src/production/*.cpp"
     "src/*.c"
 )
+
+# Add version-specific sources
+if(BUILD_VERSION STREQUAL "enterprise")
+    # Enterprise includes all production features plus enterprise-specific
+    file(GLOB_RECURSE ENTERPRISE_SOURCES "src/enterprise/*.cpp")
+    list(APPEND SOURCES ${ENTERPRISE_SOURCES})
+elseif(BUILD_VERSION STREQUAL "datacenter")
+    # Datacenter includes all enterprise and production features plus datacenter-specific
+    file(GLOB_RECURSE ENTERPRISE_SOURCES "src/enterprise/*.cpp")
+    file(GLOB_RECURSE DATACENTER_SOURCES "src/datacenter/*.cpp")
+    list(APPEND SOURCES ${ENTERPRISE_SOURCES} ${DATACENTER_SOURCES})
+endif()
+
 file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h")
 
-# Main entry point
-set(MAIN_SOURCE "main/production.cpp")
-
-# Create executable
+# Create executable with version-specific main
 add_executable(${PROJECT_NAME} ${SOURCES} ${MAIN_SOURCE} ${HEADERS})
 
 # Link libraries
@@ -285,25 +326,25 @@ if(ENABLE_PACKAGING)
         endif()
     endif()
     
-    # Set package file names with standardized format: {project}-{version}-{platform}-{distro}-{arch}.{ext}
-    # Format matches: simple-sftpd-0.2.1-linux-debian-amd64.deb
+    # Set package file names with standardized format: {project}-{version}-{product}-{platform}-{distro}-{arch}.{ext}
+    # Format matches: simple-sftpd-0.2.1-production-linux-debian-amd64.deb
     if(APPLE)
-        # macOS packages: simple-sftpd-0.2.1-macos-intel.dmg / .pkg
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}")
+        # macOS packages: simple-sftpd-0.2.1-production-macos-intel.dmg / .pkg
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}")
     elseif(UNIX)
-        # Linux packages: simple-sftpd-0.2.1-linux-debian-amd64.deb / .rpm
+        # Linux packages: simple-sftpd-0.2.1-production-linux-debian-amd64.deb / .rpm
         # CPack automatically adds architecture for DEB/RPM, so we set the base name
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
         
         # Override DEB and RPM file names to match our format
         # CPack format: {CPACK_PACKAGE_FILE_NAME}_{CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb
-        # We want: {name}-{version}-{platform}-{arch}.deb (architecture already in CPACK_PACKAGE_FILE_NAME)
+        # We want: {name}-{version}-{product}-{platform}-{arch}.deb (architecture already in CPACK_PACKAGE_FILE_NAME)
         # So we remove architecture from CPACK_DEBIAN_FILE_NAME pattern
-        set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
-        set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
     else()
         # Windows and others
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_NAME}-${PACKAGE_ARCH}")
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_NAME}-${PACKAGE_ARCH}")
     endif()
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
     
@@ -361,7 +402,10 @@ endif()
 # Print configuration summary
 message(STATUS "")
 message(STATUS "Configuration Summary:")
+message(STATUS "")
+message(STATUS "Configuration Summary:")
 message(STATUS "  Project: ${PROJECT_NAME} ${PROJECT_VERSION}")
+message(STATUS "  Product Version: ${PRODUCT_VERSION_DISPLAY} (${PRODUCT_VERSION_NAME})")
 message(STATUS "  Platform: ${PLATFORM_NAME}")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")

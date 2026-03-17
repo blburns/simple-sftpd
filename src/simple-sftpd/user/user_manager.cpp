@@ -17,11 +17,25 @@
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
 #include "simple-sftpd/utils/logger.hpp"
+#include <fstream>
+#include <filesystem>
+#include <chrono>
+
+#if defined(ENABLE_JSON) || defined(SIMPLE_SFTPD_JSON_ENABLED)
+#include <json/json.h>
+#define HAS_JSON_SUPPORT 1
+#else
+#define HAS_JSON_SUPPORT 0
+#endif
 
 namespace simple_sftpd {
 
-FTPUserManager::FTPUserManager(std::shared_ptr<Logger> logger)
-    : logger_(logger) {
+FTPUserManager::FTPUserManager(std::shared_ptr<Logger> logger, const std::string& user_file)
+    : logger_(logger), user_file_(user_file) {
+    // Auto-load users if file is specified
+    if (!user_file_.empty()) {
+        loadUsers();
+    }
 }
 
 bool FTPUserManager::addUser(std::shared_ptr<FTPUser> user) {
@@ -29,18 +43,36 @@ bool FTPUserManager::addUser(std::shared_ptr<FTPUser> user) {
         return false;
     }
     
-    std::lock_guard<std::mutex> lock(users_mutex_);
-    users_[user->getUsername()] = user;
+    {
+        std::lock_guard<std::mutex> lock(users_mutex_);
+        users_[user->getUsername()] = user;
+    }
     logger_->info("Added user: " + user->getUsername());
+    
+    // Auto-save if user file is configured
+    if (!user_file_.empty()) {
+        saveUsers();
+    }
     return true;
 }
 
 bool FTPUserManager::removeUser(const std::string& username) {
-    std::lock_guard<std::mutex> lock(users_mutex_);
-    auto it = users_.find(username);
-    if (it != users_.end()) {
-        users_.erase(it);
+    bool removed = false;
+    {
+        std::lock_guard<std::mutex> lock(users_mutex_);
+        auto it = users_.find(username);
+        if (it != users_.end()) {
+            users_.erase(it);
+            removed = true;
+        }
+    }
+    
+    if (removed) {
         logger_->info("Removed user: " + username);
+        // Auto-save if user file is configured
+        if (!user_file_.empty()) {
+            saveUsers();
+        }
         return true;
     }
     return false;
@@ -70,6 +102,117 @@ std::vector<std::string> FTPUserManager::listUsers() const {
         usernames.push_back(pair.first);
     }
     return usernames;
+}
+
+void FTPUserManager::setUserFile(const std::string& filename) {
+    user_file_ = filename;
+}
+
+bool FTPUserManager::loadUsers(const std::string& filename) {
+    std::string file_to_load = filename.empty() ? user_file_ : filename;
+    if (file_to_load.empty()) {
+        logger_->warn("No user file specified for loading");
+        return false;
+    }
+
+#if HAS_JSON_SUPPORT
+    std::ifstream file(file_to_load);
+    if (!file.is_open()) {
+        // File doesn't exist yet, that's okay - we'll create it on first save
+        logger_->info("User file does not exist yet: " + file_to_load);
+        return true;
+    }
+
+    Json::Value root;
+    Json::Reader reader;
+    
+    if (!reader.parse(file, root)) {
+        logger_->error("Failed to parse user file: " + reader.getFormattedErrorMessages());
+        file.close();
+        return false;
+    }
+    file.close();
+
+    std::lock_guard<std::mutex> lock(users_mutex_);
+    users_.clear();
+
+    if (root.isMember("users") && root["users"].isArray()) {
+        const Json::Value& users_array = root["users"];
+        for (const auto& user_json : users_array) {
+            if (user_json.isMember("username") && user_json.isMember("password") && 
+                user_json.isMember("home_directory")) {
+                std::string username = user_json["username"].asString();
+                std::string password = user_json["password"].asString();
+                std::string home_dir = user_json["home_directory"].asString();
+                
+                auto user = std::make_shared<FTPUser>(username, password, home_dir);
+                users_[username] = user;
+            }
+        }
+        logger_->info("Loaded " + std::to_string(users_.size()) + " users from " + file_to_load);
+        return true;
+    } else {
+        logger_->warn("User file does not contain valid users array");
+        return false;
+    }
+#else
+    logger_->warn("JSON support not enabled. Cannot load users from file.");
+    return false;
+#endif
+}
+
+bool FTPUserManager::saveUsers(const std::string& filename) const {
+    std::string file_to_save = filename.empty() ? user_file_ : filename;
+    if (file_to_save.empty()) {
+        logger_->warn("No user file specified for saving");
+        return false;
+    }
+
+#if HAS_JSON_SUPPORT
+    // Create directory if it doesn't exist
+    std::filesystem::path file_path(file_to_save);
+    if (file_path.has_parent_path()) {
+        std::filesystem::create_directories(file_path.parent_path());
+    }
+
+    Json::Value root;
+    Json::Value users_array(Json::arrayValue);
+
+    {
+        std::lock_guard<std::mutex> lock(users_mutex_);
+        for (const auto& pair : users_) {
+            const auto& user = pair.second;
+            Json::Value user_json;
+            user_json["username"] = user->getUsername();
+            user_json["password"] = user->getPassword(); // Note: In production, this should be hashed
+            user_json["home_directory"] = user->getHomeDirectory();
+            users_array.append(user_json);
+        }
+    }
+
+    root["users"] = users_array;
+    root["version"] = "1.0";
+    root["updated"] = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+    std::ofstream file(file_to_save);
+    if (!file.is_open()) {
+        logger_->error("Failed to open user file for writing: " + file_to_save);
+        return false;
+    }
+
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "  ";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+    writer->write(root, &file);
+    file.close();
+
+    logger_->info("Saved " + std::to_string(users_array.size()) + " users to " + file_to_save);
+    return true;
+#else
+    logger_->warn("JSON support not enabled. Cannot save users to file.");
+    return false;
+#endif
 }
 
 } // namespace simple_sftpd

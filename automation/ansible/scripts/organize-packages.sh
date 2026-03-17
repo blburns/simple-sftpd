@@ -17,16 +17,25 @@ NC='\033[0m' # No Color
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
+# Try to get version from CMakeLists.txt first (source of truth), fallback to Makefile, then default
+VERSION=$(grep '^project.*VERSION' "$PROJECT_ROOT/CMakeLists.txt" 2>/dev/null | sed -n 's/.*VERSION \([0-9.]*\).*/\1/p' | head -1)
+if [[ -z "$VERSION" ]]; then
+    VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3)
+fi
+if [[ -z "$VERSION" ]]; then
+    VERSION="0.1.0"
+fi
+# Product version (production, enterprise, datacenter) - can be passed as argument or detected from package names
+PRODUCT_VERSION="${1:-production}"
 DIST_DIR="$PROJECT_ROOT/dist"
 BUILD_DIR="$PROJECT_ROOT/build"
 CENTRAL_RELEASE_DIR="$DIST_DIR/centralized"
-VERSION_DIR="$CENTRAL_RELEASE_DIR/v$VERSION"
+VERSION_DIR="$CENTRAL_RELEASE_DIR/v${VERSION}/${PRODUCT_VERSION}"
 
 # Functions
 print_header() {
     echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║              Organize Packages Script for simple-sftpd v$VERSION       ║${NC}"
+    echo -e "${BLUE}║     Organize Packages Script for simple-sftpd v$VERSION ($PRODUCT_VERSION)     ║${NC}"
     echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -188,84 +197,86 @@ rename_packages() {
         local version="${VERSION#v}"
         
         # Determine new name based on file type and current name
+        # Format: {project}-{version}-{product}-{platform}-{distro}-{arch}.{ext}
         if [[ "$filename" =~ \.deb$ ]]; then
-            # DEB: simple-sftpd-0.2.1-linux-debian-amd64.deb
-            # CPack might create: simple-sftpd-0.2.1-linux-debian-amd64_amd64.deb
-            # Remove duplicate architecture suffix if present
-            if [[ "$filename" =~ _amd64\.deb$ ]] || [[ "$filename" =~ _arm64\.deb$ ]] || [[ "$filename" =~ _armhf\.deb$ ]]; then
-                new_name="${filename/_amd64.deb/-amd64.deb}"
-                new_name="${new_name/_arm64.deb/-arm64.deb}"
-                new_name="${new_name/_armhf.deb/-armhf.deb}"
-            elif [[ "$filename" =~ -amd64\.deb$ ]] || [[ "$filename" =~ -arm64\.deb$ ]] || [[ "$filename" =~ -armhf\.deb$ ]]; then
-                # Already in correct format
-                continue
-            else
-                # Try to extract architecture and rebuild name
-                if [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.deb ]]; then
-                    local rest="${BASH_REMATCH[1]}"
-                    # If architecture is missing, try to detect from system
-                    local arch="amd64"
-                    if command -v dpkg-architecture &> /dev/null; then
-                        arch=$(dpkg-architecture -qDEB_BUILD_ARCH 2>/dev/null || echo "amd64")
-                    fi
-                    new_name="${PROJECT_NAME}-${version}-linux-debian-${arch}.deb"
+            # DEB: simple-sftpd-0.1.0-production-linux-debian-amd64.deb
+            # Check if product version is already in name
+            if [[ "$filename" =~ -${PRODUCT_VERSION}- ]]; then
+                # Product version already present, just fix architecture if needed
+                if [[ "$filename" =~ _amd64\.deb$ ]] || [[ "$filename" =~ _arm64\.deb$ ]] || [[ "$filename" =~ _armhf\.deb$ ]]; then
+                    new_name="${filename/_amd64.deb/-amd64.deb}"
+                    new_name="${new_name/_arm64.deb/-arm64.deb}"
+                    new_name="${new_name/_armhf.deb/-armhf.deb}"
+                else
+                    continue
                 fi
+            elif [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.deb ]]; then
+                # Product version missing, add it
+                local rest="${BASH_REMATCH[1]}"
+                local arch="amd64"
+                if command -v dpkg-architecture &> /dev/null; then
+                    arch=$(dpkg-architecture -qDEB_BUILD_ARCH 2>/dev/null || echo "amd64")
+                fi
+                # Remove duplicate architecture suffix if present
+                rest="${rest/_amd64/-amd64}"
+                rest="${rest/_arm64/-arm64}"
+                rest="${rest/_armhf/-armhf}"
+                new_name="${PROJECT_NAME}-${version}-${PRODUCT_VERSION}-${rest}-${arch}.deb"
             fi
         elif [[ "$filename" =~ \.rpm$ ]]; then
-            # RPM: simple-sftpd-0.2.1-linux-generic-amd64.rpm
-            # CPack might create: simple-sftpd-0.2.1-linux-generic-amd64.x86_64.rpm
-            if [[ "$filename" =~ \.x86_64\.rpm$ ]]; then
-                new_name="${filename/.x86_64.rpm/-amd64.rpm}"
-            elif [[ "$filename" =~ \.aarch64\.rpm$ ]]; then
-                new_name="${filename/.aarch64.rpm/-arm64.rpm}"
-            elif [[ "$filename" =~ \.armv7hl\.rpm$ ]]; then
-                new_name="${filename/.armv7hl.rpm/-armhf.rpm}"
-            elif [[ "$filename" =~ -amd64\.rpm$ ]] || [[ "$filename" =~ -arm64\.rpm$ ]] || [[ "$filename" =~ -armhf\.rpm$ ]]; then
-                # Already in correct format
-                continue
-            else
-                # Try to extract and rebuild
-                if [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.rpm ]]; then
-                    local rest="${BASH_REMATCH[1]}"
-                    local arch="amd64"
-                    if command -v rpm &> /dev/null; then
-                        arch=$(rpm --eval '%{_arch}' 2>/dev/null || echo "amd64")
-                        # Map RPM arch to our format
-                        case "$arch" in
-                            x86_64) arch="amd64" ;;
-                            aarch64) arch="arm64" ;;
-                            armv7hl) arch="armhf" ;;
-                        esac
-                    fi
-                    new_name="${PROJECT_NAME}-${version}-linux-generic-${arch}.rpm"
+            # RPM: simple-sftpd-0.1.0-production-linux-generic-amd64.rpm
+            # Check if product version is already in name
+            if [[ "$filename" =~ -${PRODUCT_VERSION}- ]]; then
+                # Product version already present, just fix architecture if needed
+                if [[ "$filename" =~ \.x86_64\.rpm$ ]]; then
+                    new_name="${filename/.x86_64.rpm/-amd64.rpm}"
+                elif [[ "$filename" =~ \.aarch64\.rpm$ ]]; then
+                    new_name="${filename/.aarch64.rpm/-arm64.rpm}"
+                elif [[ "$filename" =~ \.armv7hl\.rpm$ ]]; then
+                    new_name="${filename/.armv7hl.rpm/-armhf.rpm}"
+                else
+                    continue
                 fi
+            elif [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.rpm ]]; then
+                # Product version missing, add it
+                local rest="${BASH_REMATCH[1]}"
+                local arch="amd64"
+                if command -v rpm &> /dev/null; then
+                    arch=$(rpm --eval '%{_arch}' 2>/dev/null || echo "amd64")
+                    # Map RPM arch to our format
+                    case "$arch" in
+                        x86_64) arch="amd64" ;;
+                        aarch64) arch="arm64" ;;
+                        armv7hl) arch="armhf" ;;
+                    esac
+                fi
+                # Remove .x86_64, .aarch64, .armv7hl suffixes
+                rest="${rest/.x86_64/}"
+                rest="${rest/.aarch64/}"
+                rest="${rest/.armv7hl/}"
+                new_name="${PROJECT_NAME}-${version}-${PRODUCT_VERSION}-${rest}-${arch}.rpm"
             fi
         elif [[ "$filename" =~ \.dmg$ ]]; then
-            # DMG: simple-sftpd-0.2.1-macos-intel.dmg
-            if [[ ! "$filename" =~ -macos-(intel|apple)\.dmg$ ]]; then
-                # Detect architecture
+            # DMG: simple-sftpd-0.1.0-production-macos-intel.dmg
+            if [[ "$filename" =~ -${PRODUCT_VERSION}-macos-(intel|apple)\.dmg$ ]]; then
+                continue
+            elif [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.dmg ]]; then
                 local arch="intel"
                 if [[ $(uname -m) == "arm64" ]]; then
                     arch="apple"
                 fi
-                if [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.dmg ]]; then
-                    new_name="${PROJECT_NAME}-${version}-macos-${arch}.dmg"
-                fi
-            else
-                continue
+                new_name="${PROJECT_NAME}-${version}-${PRODUCT_VERSION}-macos-${arch}.dmg"
             fi
         elif [[ "$filename" =~ \.pkg$ ]]; then
-            # PKG: simple-sftpd-0.2.1-macos-intel.pkg
-            if [[ ! "$filename" =~ -macos-(intel|apple)\.pkg$ ]]; then
+            # PKG: simple-sftpd-0.1.0-production-macos-intel.pkg
+            if [[ "$filename" =~ -${PRODUCT_VERSION}-macos-(intel|apple)\.pkg$ ]]; then
+                continue
+            elif [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.pkg ]]; then
                 local arch="intel"
                 if [[ $(uname -m) == "arm64" ]]; then
                     arch="apple"
                 fi
-                if [[ "$filename" =~ ${PROJECT_NAME}-${version}-(.*)\.pkg ]]; then
-                    new_name="${PROJECT_NAME}-${version}-macos-${arch}.pkg"
-                fi
-            else
-                continue
+                new_name="${PROJECT_NAME}-${version}-${PRODUCT_VERSION}-macos-${arch}.pkg"
             fi
         fi
         
@@ -320,15 +331,18 @@ list_packages() {
 }
 
 show_help() {
-    echo "Usage: $0 [OPTIONS]"
+    echo "Usage: $0 [PRODUCT_VERSION] [OPTIONS]"
+    echo ""
+    echo "Arguments:"
+    echo "  PRODUCT_VERSION    Product version: production (default), enterprise, datacenter"
     echo ""
     echo "Options:"
     echo "  -h, --help          Show this help message"
     echo "  -l, --list          List packages in centralized directory"
-    echo "  -v, --version        Show version information"
+    echo "  -v, --version       Show version information"
     echo ""
     echo "This script moves recently built packages from dist/ and build/ directories"
-    echo "to the centralized release directory: $CENTRAL_RELEASE_DIR/v$VERSION/"
+    echo "to the centralized release directory: $CENTRAL_RELEASE_DIR/v${VERSION}/${PRODUCT_VERSION}/"
     echo ""
     echo "Package types moved:"
     echo "  - Linux: .deb, .rpm"
@@ -336,6 +350,11 @@ show_help() {
     echo "  - Windows: .exe, .msi"
     echo "  - Archives: .tar.gz, .zip"
     echo "  - Source: *-src.tar.gz, *-src.zip"
+    echo ""
+    echo "Examples:"
+    echo "  $0 production          # Organize production packages"
+    echo "  $0 enterprise         # Organize enterprise packages"
+    echo "  $0 datacenter          # Organize datacenter packages"
 }
 
 main() {
@@ -358,6 +377,11 @@ main() {
                 echo "Organize Packages Script v$VERSION"
                 exit 0
                 ;;
+            production|enterprise|datacenter)
+                # Product version passed as first positional argument
+                PRODUCT_VERSION="$1"
+                shift
+                ;;
             *)
                 print_error "Unknown option: $1"
                 show_help
@@ -365,6 +389,9 @@ main() {
                 ;;
         esac
     done
+    
+    # Update VERSION_DIR with product version
+    VERSION_DIR="$CENTRAL_RELEASE_DIR/v${VERSION}/${PRODUCT_VERSION}"
     
     # Check prerequisites
     check_directories

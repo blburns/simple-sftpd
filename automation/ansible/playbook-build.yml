@@ -9,17 +9,27 @@
     build_group: "{{ ansible_user }}"
     project_name: simple-sftpd
     git_repo_url: "https://github.com/simpledaemons/simple-sftpd.git"
-    git_branch: "{{ git_branch | default('main') }}"
-    build_type: "{{ build_type | default('Release') }}"
-    clean_build: "{{ clean_build | default(false) }}"
-    run_tests: "{{ run_tests | default(true) }}"
-    create_packages: "{{ create_packages | default(false) }}"
     
   tasks:
+    - name: Set default variables if not provided
+      set_fact:
+        git_branch: "{{ git_branch | default('main') }}"
+        build_type: "{{ build_type | default('Release') }}"
+        build_version: "{{ build_version | default('production') }}"
+        clean_build: "{{ clean_build | default(false) }}"
+        run_tests: "{{ run_tests | default(true) }}"
+        create_packages: "{{ create_packages | default(false) }}"
+    
+    - name: Validate build version
+      fail:
+        msg: "build_version must be one of: production, enterprise, datacenter"
+      when: build_version not in ['production', 'enterprise', 'datacenter']
+
     - name: Display build information
       debug:
         msg:
           - "Building {{ project_name }} on {{ inventory_hostname }}"
+          - "Product Version: {{ build_version }}"
           - "Repository: {{ git_repo_url }}"
           - "Branch: {{ git_branch }}"
           - "Build type: {{ build_type }}"
@@ -232,6 +242,7 @@
       shell: >
         cmake ..
         -DCMAKE_BUILD_TYPE={{ build_type }}
+        -DBUILD_VERSION={{ build_version }}
         -DENABLE_TESTS={{ 'ON' if run_tests | bool else 'OFF' }}
         -DENABLE_PACKAGING={{ 'ON' if create_packages | bool else 'OFF' }}
         -DENABLE_SSL=ON
@@ -433,7 +444,7 @@
       when: create_packages | bool
 
     - name: Organize packages into centralized directory
-      shell: "{{ project_dir }}/automation/ansible/scripts/organize-packages.sh"
+      shell: "{{ project_dir }}/automation/ansible/scripts/organize-packages.sh {{ build_version }}"
       args:
         chdir: "{{ project_dir }}"
       register: organize_result
@@ -462,6 +473,7 @@
         msg:
           - "=== Build Summary for {{ inventory_hostname }} ==="
           - "Build completed successfully"
+          - "Product Version: {{ build_version }}"
           - "Binary location: {{ project_dir }}/build/simple-sftpd"
           - "Build type: {{ build_type }}"
           - "Tests: {{ 'Passed' if (run_tests | bool and test_result.rc == 0) else 'Skipped or Failed' }}"

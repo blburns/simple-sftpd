@@ -476,9 +476,22 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
 
     std::string subcommand = args[0];
     
-    // Initialize logger and user manager
+    // Determine user file path
+    std::string user_file;
+    #ifdef _WIN32
+    user_file = "C:\\Program Files\\simple-sftpd\\users.json";
+    #else
+    user_file = "/etc/simple-sftpd/users.json";
+    // Fallback to local directory if /etc is not writable
+    if (!std::filesystem::exists("/etc/simple-sftpd") && 
+        access("/etc/simple-sftpd", W_OK) != 0) {
+        user_file = std::string(getenv("HOME") ? getenv("HOME") : ".") + "/.simple-sftpd/users.json";
+    }
+    #endif
+    
+    // Initialize logger and user manager with user file
     auto logger = std::make_shared<Logger>("", LogLevel::INFO, true, false, LogFormat::STANDARD);
-    auto user_manager = std::make_shared<FTPUserManager>(logger);
+    auto user_manager = std::make_shared<FTPUserManager>(logger, user_file);
 
     if (subcommand == "add") {
         std::string username, password, home_dir;
@@ -502,7 +515,7 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
         auto user = std::make_shared<FTPUser>(username, password, home_dir);
         if (user_manager->addUser(user)) {
             std::cout << "User '" << username << "' added successfully" << std::endl;
-            std::cout << "Note: User is stored in memory only. Persistent storage coming in v0.2.0" << std::endl;
+            std::cout << "User saved to: " << user_manager->getUserFile() << std::endl;
             return true;
         }
         return false;
@@ -524,6 +537,7 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
         
         if (user_manager->removeUser(username)) {
             std::cout << "User '" << username << "' removed successfully" << std::endl;
+            std::cout << "Changes saved to: " << user_manager->getUserFile() << std::endl;
             return true;
         } else {
             std::cerr << "Error: User '" << username << "' not found" << std::endl;
