@@ -55,6 +55,7 @@ set(TEST_SOURCES
     unit/test_logger.cpp
     unit/test_ftp_rate_limiter.cpp
     unit/test_ftp_connection_manager.cpp
+    unit/test_compression.cpp
     integration/test_ftp_connection.cpp
     integration/test_ftp_server.cpp
     main.cpp
@@ -63,21 +64,19 @@ set(TEST_SOURCES
 # Create test executable
 add_executable(simple-sftpd-tests ${TEST_SOURCES})
 
-# Link libraries
+# Link libraries (gtest_main and gmock already bring in gtest - avoid duplicate libs)
 if(GTest_FOUND)
-    # System GTest uses different target names
+    # System GTest: link gtest_main and gmock only to avoid "duplicate library" linker warning
     target_link_libraries(simple-sftpd-tests
         PRIVATE
-        GTest::gtest
         GTest::gtest_main
         GTest::gmock
         Threads::Threads
     )
 else()
-    # FetchContent GTest
+    # FetchContent GTest: same - gtest_main and gmock pull in gtest
     target_link_libraries(simple-sftpd-tests
         PRIVATE
-        gtest
         gtest_main
         gmock
         Threads::Threads
@@ -98,6 +97,15 @@ if(ENABLE_JSON)
     target_compile_definitions(simple-sftpd-tests PRIVATE ENABLE_JSON)
     target_compile_options(simple-sftpd-tests PRIVATE ${JSONCPP_CFLAGS_OTHER})
     target_link_directories(simple-sftpd-tests PRIVATE ${JSONCPP_LIBRARY_DIRS})
+endif()
+
+# Compression if enabled (for test_compression)
+if(ENABLE_COMPRESSION)
+    target_compile_definitions(simple-sftpd-tests PRIVATE ENABLE_COMPRESSION)
+    target_link_libraries(simple-sftpd-tests PRIVATE ZLIB::ZLIB)
+    if(BZIP2_LIB)
+        target_link_libraries(simple-sftpd-tests PRIVATE ${BZIP2_LIB})
+    endif()
 endif()
 
 # Add source files for testing (without main.cpp)
