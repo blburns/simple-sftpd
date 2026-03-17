@@ -1,6 +1,6 @@
 # Production Version Configuration Guide
 
-**Version:** In Development  
+**Version:** 0.1.0  
 **License:** Apache 2.0
 
 ---
@@ -13,4 +13,4 @@ See [Configuration Reference](../shared/configuration/README.md) for complete op
 
 ---
 
-**Last Updated:** December 2024
+**Last Updated:** March 2025
