@@ -240,8 +240,6 @@ endif()
 
 # Package generation
 if(ENABLE_PACKAGING)
-    include(CPack)
-    
     # Package information
     set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
     set(CPACK_PACKAGE_VENDOR "SimpleDaemons")
@@ -306,7 +304,7 @@ if(ENABLE_PACKAGING)
         set(CPACK_DEBIAN_PACKAGE_MAINTAINER "SimpleDaemons <info@simpledaemons.com>")
         set(CPACK_DEBIAN_PACKAGE_SECTION "net")
         set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl1.1, libjsoncpp25")
+        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3 | libssl1.1, libjsoncpp25")
         set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "systemd")
         set(CPACK_DEBIAN_PACKAGE_SUGGESTS "logrotate")
         set(CPACK_DEBIAN_PACKAGE_CONFLICTS "ntp")
@@ -364,6 +362,8 @@ if(ENABLE_PACKAGING)
                     # Map common distro IDs to package names
                     if(DISTRO_ID MATCHES "debian|ubuntu")
                         set(PLATFORM_ID "linux-debian")
+                    elseif(DISTRO_ID MATCHES "rhel|centos|fedora|rocky|almalinux|ol")
+                        set(PLATFORM_ID "linux-rhel")
                     endif()
                 endif()
             endif()
@@ -440,6 +440,8 @@ if(ENABLE_PACKAGING)
         "*.exp"
         "*.lib"
     )
+
+    include(CPack)
 endif()
 
 # Print configuration summary

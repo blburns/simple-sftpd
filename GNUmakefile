@@ -194,7 +194,7 @@ ifeq ($(PLATFORM),macos)
 else ifeq ($(PLATFORM),linux)
 	@echo "Building Linux packages..."
 	@mkdir -p $(DIST_DIR)
-	@built=0; \
+	@set -e; built=0; \
 	if command -v rpmbuild >/dev/null 2>&1; then \
 		echo "Building RPM package..."; \
 		cd $(BUILD_DIR) && cpack -G RPM; \
