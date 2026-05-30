@@ -188,7 +188,7 @@ gmon.out
 callgrind.out.*
 
 # Core dumps
-core
+/core
 core.*
 *.core
 *.dump
