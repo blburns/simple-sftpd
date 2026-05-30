@@ -246,14 +246,10 @@ install(DIRECTORY config/
 # Install service files (systemd + SysV init.d on Linux)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES deployment/systemd/${PROJECT_NAME}.service
-        DESTINATION lib/systemd/system
+        DESTINATION /usr/lib/systemd/system
     )
     install(PROGRAMS deployment/init.d/${PROJECT_NAME}
         DESTINATION /etc/init.d
-    )
-elseif(UNIX AND NOT APPLE)
-    install(FILES deployment/systemd/${PROJECT_NAME}.service
-        DESTINATION lib/systemd/system
     )
 elseif(APPLE)
     install(FILES deployment/launchd/com.${PROJECT_NAME}.${PROJECT_NAME}.plist
@@ -365,6 +361,10 @@ if(ENABLE_PACKAGING)
         set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/simpledaemons/${PROJECT_NAME}")
         set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${PROJECT_DESCRIPTION}")
         set(CPACK_DEBIAN_PACKAGE_LONG_DESCRIPTION "${PROJECT_DESCRIPTION}")
+        set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/postinst"
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/prerm"
+        )
         
         # RPM package settings
         set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
@@ -375,6 +375,10 @@ if(ENABLE_PACKAGING)
         set(CPACK_RPM_PACKAGE_SUGGESTS "systemd")
         set(CPACK_RPM_PACKAGE_CONFLICTS "ntp")
         set(CPACK_RPM_PACKAGE_PROVIDES "${PROJECT_NAME}")
+        set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postinstall.sh")
+        set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postuninstall.sh")
         
         # Set package architecture and determine architecture string
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")

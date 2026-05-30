@@ -1,17 +1,37 @@
 [Unit]
 Description=Simple Secure FTP Daemon
-After=network.target
+Documentation=https://github.com/SimpleDaemons/simple-sftpd
+After=network-online.target nss-lookup.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/simple-sftpd --config /etc/simple-sftpd/simple-sftpd.conf
-Restart=always
-RestartSec=10
 User=simple-sftpd
 Group=simple-sftpd
+ExecStart=/usr/bin/simple-sftpd start --config /etc/simple-sftpd/simple-sftpd.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=simple-sftpd
+
+# Writable paths (users.json, virtual_hosts.json, logs, FTP root, PID file)
+LogsDirectory=simple-sftpd
+StateDirectory=simple-sftpd
+RuntimeDirectory=simple-sftpd
+ReadWritePaths=/etc/simple-sftpd /var/ftp /var/run
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Resource limits
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-

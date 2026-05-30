@@ -1,53 +1,40 @@
-#!/bin/bash
-# Post-installation script for simple-sftpd
-# Requires license acceptance
-
+#!/bin/sh
 set -e
 
-PROJECT_NAME="simple-sftpd"
-CONFIG_DIR="/etc/$simple-sftpd"
-LOG_DIR="/var/log/$simple-sftpd"
-SERVICE_USER="sftpddev"
+SERVICE=simple-sftpd
+SERVICE_USER=simple-sftpd
+SERVICE_GROUP=simple-sftpd
 
-# Display license and require acceptance
-if [ "$1" = "configure" ]; then
-    echo "=========================================="
-    echo "simple-sftpd License Agreement"
-    echo "=========================================="
-    echo ""
-    cat /usr/share/doc/$simple-sftpd/copyright 2>/dev/null || \
-        cat /usr/share/$simple-sftpd/LICENSE.txt 2>/dev/null || \
-        echo "Please review the license at: https://github.com/simpledaemons/$simple-sftpd/blob/main/LICENSE"
-    echo ""
-    echo "By continuing, you agree to the terms of the license."
-    echo ""
-    read -p "Do you accept the license? [y/N]: " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "License not accepted. Installation cancelled."
-        exit 1
-    fi
-    
-    # Create service user
-    if ! id "$SERVICE_USER" &>/dev/null; then
-        useradd -r -s /usr/sbin/nologin -d /var/lib/$simple-sftpd -c "$simple-sftpd service user" "$SERVICE_USER"
-    fi
-    
-    # Create directories
-    mkdir -p "$CONFIG_DIR"
-    mkdir -p "$LOG_DIR"
-    mkdir -p "/var/lib/$simple-sftpd"
-    
-    # Set permissions
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "/var/lib/$simple-sftpd"
-    
-    # Enable and start service
-    systemctl daemon-reload
-    systemctl enable "$simple-sftpd" 2>/dev/null || true
-    systemctl start "$simple-sftpd" 2>/dev/null || true
-fi
+case "$1" in
+    configure)
+        if ! getent passwd "$SERVICE_USER" >/dev/null 2>&1; then
+            if command -v adduser >/dev/null 2>&1; then
+                adduser --system --group --home /var/lib/simple-sftpd \
+                    --no-create-home --disabled-login --disabled-password \
+                    --gecos "Simple Secure FTP Daemon" "$SERVICE_USER" 2>/dev/null || \
+                useradd --system --home-dir /var/lib/simple-sftpd --shell /usr/sbin/nologin \
+                    --comment "Simple Secure FTP Daemon" "$SERVICE_USER"
+            else
+                useradd --system --home-dir /var/lib/simple-sftpd --shell /sbin/nologin \
+                    --comment "Simple Secure FTP Daemon" "$SERVICE_USER"
+            fi
+        fi
+
+        mkdir -p /var/ftp /var/log/simple-sftpd /var/lib/simple-sftpd
+        chown "$SERVICE_USER:$SERVICE_GROUP" /var/ftp /var/log/simple-sftpd /var/lib/simple-sftpd
+        chmod 755 /etc/simple-sftpd
+
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper unmask "${SERVICE}.service" || true
+            deb-systemd-helper preset "${SERVICE}.service" || true
+            deb-systemd-helper enable "${SERVICE}.service" || true
+            deb-systemd-helper try-restart "${SERVICE}.service" || true
+        elif command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload
+            systemctl enable "${SERVICE}.service" || true
+            systemctl try-restart "${SERVICE}.service" || true
+        fi
+        ;;
+esac
 
 exit 0
-

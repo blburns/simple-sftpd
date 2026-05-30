@@ -3,8 +3,12 @@
 
 set -e
 
-# Reload systemd
-systemctl daemon-reload
+SERVICE=simple-sftpd
+
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop "${SERVICE}.service" 2>/dev/null || true
+    systemctl disable "${SERVICE}.service" 2>/dev/null || true
+    systemctl daemon-reload
+fi
 
 exit 0
-
