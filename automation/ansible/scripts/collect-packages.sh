@@ -15,7 +15,7 @@ REMOTE_PROJECT_DIR="/opt/simple-sftpd"
 REMOTE_DIST_DIR="$REMOTE_PROJECT_DIR/dist"
 REMOTE_BUILD_DIR="$REMOTE_PROJECT_DIR/build"
 # Get version from Makefile (assuming it's in the project root)
-VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
+VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/GNUmakefile" 2>/dev/null | cut -d' ' -f3 || grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
 REMOTE_CENTRALIZED_DIR="$REMOTE_PROJECT_DIR/dist/centralized/v$VERSION"
 
 # Colors for output
@@ -335,7 +335,7 @@ organize_packages() {
     print_info "Organizing packages..."
     
     # Get version from Makefile
-    VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
+    VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/GNUmakefile" 2>/dev/null | cut -d' ' -f3 || grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
     CENTRALIZED_DIR="$DIST_DIR/centralized/v$VERSION"
     
     # Create centralized directory structure
@@ -495,7 +495,7 @@ display_summary() {
     echo ""
     
     # Show centralized directory packages
-    VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
+    VERSION=$(grep '^VERSION =' "$PROJECT_ROOT/GNUmakefile" 2>/dev/null | cut -d' ' -f3 || grep '^VERSION =' "$PROJECT_ROOT/Makefile" 2>/dev/null | cut -d' ' -f3 || echo "0.2.0")
     CENTRALIZED_DIR="$DIST_DIR/centralized/v$VERSION"
     echo ""
     echo "Centralized directory ($CENTRALIZED_DIR):"
