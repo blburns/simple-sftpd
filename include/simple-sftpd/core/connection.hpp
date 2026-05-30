@@ -31,10 +31,15 @@ class FTPUser;
 class SSLContext;
 class FileCache;
 class PAMAuth;
+class FTPVirtualHostManager;
+class FTPVirtualHost;
+class SessionTracker;
 
 class FTPConnection {
 public:
-    FTPConnection(int socket, std::shared_ptr<Logger> logger, std::shared_ptr<FTPServerConfig> config);
+    FTPConnection(int socket, std::shared_ptr<Logger> logger, std::shared_ptr<FTPServerConfig> config,
+                  std::shared_ptr<FTPVirtualHostManager> vhost_manager = nullptr,
+                  std::shared_ptr<SessionTracker> session_tracker = nullptr);
     ~FTPConnection();
 
     void start();
@@ -69,6 +74,7 @@ private:
     void handleAPPE(const std::string& filename);
     void handleRNFR(const std::string& filename);
     void handleRNTO(const std::string& filename);
+    void handleHOST(const std::string& hostname);
     
     // Data Connection Management
     int createPassiveDataSocket();
@@ -128,6 +134,12 @@ private:
     // Transfer resume state
     std::streampos resume_position_;
     std::string rename_from_path_;
+    
+    // Virtual hosting (v0.3.0)
+    std::shared_ptr<FTPVirtualHostManager> virtual_host_manager_;
+    std::shared_ptr<FTPVirtualHost> current_virtual_host_;
+    std::shared_ptr<SessionTracker> session_tracker_;
+    bool session_registered_ = false;
 };
 
 } // namespace simple_sftpd

@@ -22,4 +22,17 @@ FTPVirtualHost::FTPVirtualHost(const std::string& hostname, const std::string& r
     : hostname_(hostname), root_directory_(root_directory), enabled_(true) {
 }
 
+std::string FTPVirtualHost::getCustomError(const std::string& code) const {
+    auto it = custom_errors_.find(code);
+    return it != custom_errors_.end() ? it->second : "";
+}
+
+void FTPVirtualHost::setCustomError(const std::string& code, const std::string& message) {
+    if (message.empty()) {
+        custom_errors_.erase(code);
+    } else {
+        custom_errors_[code] = message;
+    }
+}
+
 } // namespace simple_sftpd

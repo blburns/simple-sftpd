@@ -22,13 +22,25 @@
 #include "simple-sftpd/security/ssl_context.hpp"
 #include "simple-sftpd/utils/file_cache.hpp"
 #include "simple-sftpd/security/pam_auth.hpp"
+#include "simple-sftpd/virtual_host/virtual_host_manager.hpp"
+#include "simple-sftpd/virtual_host/virtual_host.hpp"
+#include "simple-sftpd/core/session_tracker.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <cstring>
+#if defined(__linux__)
+#include <sys/sendfile.h>
+#elif defined(__APPLE__)
+#include <sys/socket.h>  /* sendfile on macOS */
+#endif
+#if !defined(_WIN32)
+#include <sys/mman.h>
+#endif
 #include <sstream>
 #include <algorithm>
 #include <vector>
@@ -45,26 +57,44 @@
 
 namespace simple_sftpd {
 
-FTPConnection::FTPConnection(int socket, std::shared_ptr<Logger> logger, std::shared_ptr<FTPServerConfig> config)
-    : socket_(socket), logger_(logger), config_(config), active_(false),
-      authenticated_(false), current_user_(nullptr), current_directory_("/"),
+namespace {
+uint64_t getDirectorySize(const std::string& path) {
+    uint64_t total = 0;
+    try {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(path,
+                std::filesystem::directory_options::skip_permission_denied)) {
+            if (entry.is_regular_file()) {
+                std::error_code ec;
+                total += std::filesystem::file_size(entry.path(), ec);
+            }
+        }
+    } catch (const std::exception&) {}
+    return total;
+}
+} // namespace
+
+FTPConnection::FTPConnection(int socket, std::shared_ptr<Logger> logger, std::shared_ptr<FTPServerConfig> config,
+                             std::shared_ptr<FTPVirtualHostManager> vhost_manager,
+                             std::shared_ptr<SessionTracker> session_tracker)
+    : socket_(socket), logger_(logger), config_(config), user_manager_(),
+      active_(false), authenticated_(false), current_user_(nullptr), current_directory_("/"),
       ssl_enabled_(false), ssl_active_(false), ssl_(nullptr), data_ssl_(nullptr),
       passive_listen_socket_(-1), data_socket_(-1), transfer_type_("A"), protection_level_("C"),
-      active_mode_port_(0), active_mode_enabled_(false), resume_position_(0) {
-    // Determine user file path
-    std::string user_file;
-    #ifdef _WIN32
-    user_file = "C:\\Program Files\\simple-sftpd\\users.json";
-    #else
-    user_file = "/etc/simple-sftpd/users.json";
-    // Fallback to local directory if /etc is not writable
-    if (!std::filesystem::exists("/etc/simple-sftpd") && 
-        access("/etc/simple-sftpd", W_OK) != 0) {
-        const char* home = getenv("HOME");
-        user_file = std::string(home ? home : ".") + "/.simple-sftpd/users.json";
+      active_mode_port_(0), active_mode_enabled_(false), resume_position_(0),
+      virtual_host_manager_(vhost_manager), current_virtual_host_(nullptr), session_tracker_(session_tracker) {
+    // User file path: from config (persistent storage) or default
+    std::string user_file = config->security.user_file;
+    if (user_file.empty()) {
+        #ifdef _WIN32
+        user_file = "C:\\Program Files\\simple-sftpd\\users.json";
+        #else
+        user_file = "/etc/simple-sftpd/users.json";
+        if (!std::filesystem::exists("/etc/simple-sftpd") && access("/etc/simple-sftpd", W_OK) != 0) {
+            const char* home = getenv("HOME");
+            user_file = std::string(home ? home : ".") + "/.simple-sftpd/users.json";
+        }
+        #endif
     }
-    #endif
-    
     user_manager_ = std::make_shared<FTPUserManager>(logger_, user_file);
     
     // Add default test user for development/testing (only if no users loaded)
@@ -121,9 +151,12 @@ void FTPConnection::stop() {
     if (!active_) {
         return;
     }
-    
+    if (session_tracker_ && session_registered_) {
+        std::string hostname = current_virtual_host_ ? current_virtual_host_->getHostname() : "";
+        session_tracker_->unregisterSession(username_, hostname);
+        session_registered_ = false;
+    }
     active_ = false;
-    
     // Cleanup SSL
     if (ssl_context_ && ssl_) {
         ssl_context_->shutdownSSL(ssl_);
@@ -204,6 +237,8 @@ void FTPConnection::handleClient() {
             handlePBSZ(argument);
         } else if (command == "PROT") {
             handlePROT(argument);
+        } else if (command == "HOST") {
+            handleHOST(argument);
         } else if (authenticated_) {
             // Commands that require authentication
             if (command == "PWD" || command == "XPWD") {
@@ -251,8 +286,15 @@ void FTPConnection::sendResponse(const std::string& response) {
     if (socket_ < 0) {
         return;
     }
-    
-    std::string full_response = response + "\r\n";
+    std::string msg = response;
+    if (current_virtual_host_ && response.size() >= 4 && response[3] == ' ') {
+        std::string code = response.substr(0, 3);
+        std::string custom = current_virtual_host_->getCustomError(code);
+        if (!custom.empty()) {
+            msg = code + " " + custom;
+        }
+    }
+    std::string full_response = msg + "\r\n";
     ssize_t sent;
     
     if (ssl_active_ && ssl_ && ssl_context_) {
@@ -327,7 +369,9 @@ void FTPConnection::handlePASS(const std::string& password) {
     }
     
     bool login_success = false;
-    current_user_ = user_manager_->getUser(username_);
+    std::shared_ptr<FTPUserManager> auth_mgr = (current_virtual_host_ && current_virtual_host_->getUserManager())
+        ? current_virtual_host_->getUserManager() : user_manager_;
+    current_user_ = auth_mgr ? auth_mgr->getUser(username_) : nullptr;
     if (current_user_ && current_user_->authenticate(password)) {
         login_success = true;
     } else if (pam_auth_ && pam_auth_->isAvailable()) {
@@ -358,18 +402,31 @@ void FTPConnection::handlePASS(const std::string& password) {
     }
     
     if (login_success && current_user_) {
+        std::string hostname = current_virtual_host_ ? current_virtual_host_->getHostname() : "";
+        if (session_tracker_) {
+            if (config_->security.max_sessions_per_user > 0 &&
+                session_tracker_->getCountForUser(username_) >= static_cast<size_t>(config_->security.max_sessions_per_user)) {
+                sendResponse("530 Too many sessions for user");
+                return;
+            }
+            if (current_virtual_host_ && current_virtual_host_->getMaxSessions() > 0 &&
+                session_tracker_->getCountForHost(hostname) >= static_cast<size_t>(current_virtual_host_->getMaxSessions())) {
+                sendResponse("530 Too many sessions for this host");
+                return;
+            }
+        }
         authenticated_ = true;
         current_directory_ = current_user_->getHomeDirectory();
-        // Ensure current directory is within home
         if (!isPathWithinHome(current_directory_)) {
             current_directory_ = current_user_->getHomeDirectory();
         }
-        
-        // Apply chroot if enabled
         if (config_->security.chroot_enabled && !config_->security.chroot_directory.empty()) {
             applyChroot();
         }
-        
+        if (session_tracker_) {
+            session_tracker_->registerSession(username_, hostname);
+            session_registered_ = true;
+        }
         sendResponse("230 User logged in, proceed");
         logger_->info("User " + username_ + " logged in");
     } else {
@@ -381,6 +438,25 @@ void FTPConnection::handlePASS(const std::string& password) {
 void FTPConnection::handleQUIT() {
     sendResponse("221 Goodbye");
     active_ = false;
+}
+
+void FTPConnection::handleHOST(const std::string& hostname) {
+    if (hostname.empty()) {
+        sendResponse("501 HOST requires hostname");
+        return;
+    }
+    if (!virtual_host_manager_) {
+        sendResponse("502 Virtual hosting not configured");
+        return;
+    }
+    auto host = virtual_host_manager_->getVirtualHost(hostname);
+    if (!host || !host->isEnabled()) {
+        sendResponse("550 Virtual host not found or disabled: " + hostname);
+        return;
+    }
+    current_virtual_host_ = host;
+    logger_->info("Virtual host selected: " + hostname);
+    sendResponse("220 Virtual host accepted: " + hostname);
 }
 
 void FTPConnection::handlePWD() {
@@ -562,63 +638,155 @@ void FTPConnection::handleRETR(const std::string& filename) {
     
     sendResponse("150 Opening " + transfer_type_ + " mode data connection");
     
-    // Accept data connection
     int data_fd = acceptDataConnection();
     if (data_fd < 0) {
         sendResponse("425 Can't open data connection");
         return;
     }
     
-    // Open file
-    std::ifstream file(filepath, std::ios::binary);
-    if (!file.is_open()) {
+    size_t total_bytes = 0;
+    const size_t buf_size = config_->transfer.buffer_size > 0 ? config_->transfer.buffer_size : 32768;
+    const int max_rate = config_->rate_limit.max_transfer_rate;
+    auto start_time = std::chrono::steady_clock::now();
+    bool use_sendfile = config_->transfer.use_sendfile;
+    bool use_mmap = config_->transfer.use_mmap;
+
+#if defined(_WIN32)
+    use_sendfile = false;
+    use_mmap = false;
+#endif
+
+    int file_fd = open(filepath.c_str(), O_RDONLY);
+    if (file_fd < 0) {
         close(data_fd);
         sendResponse("550 Failed to open file");
         return;
     }
-    
-    // Seek to resume position if set
-    if (resume_position_ > 0) {
-        file.seekg(resume_position_);
-        logger_->debug("Resuming transfer from position: " + std::to_string(resume_position_));
+    struct stat st;
+    if (fstat(file_fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(file_fd);
+        close(data_fd);
+        sendResponse("550 Invalid file");
+        return;
     }
-    
-    // Transfer file with bandwidth throttling
-    char buffer[8192];
-    size_t total_bytes = 0;
-    auto start_time = std::chrono::steady_clock::now();
-    int max_rate = config_->rate_limit.max_transfer_rate;
-    
-    while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0) {
-        size_t bytes_read = file.gcount();
-        
-        // Bandwidth throttling for downloads
-        if (max_rate > 0) {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-            if (elapsed > 0) {
-                size_t allowed_bytes = (max_rate * elapsed) / 1000;
-                if (total_bytes + bytes_read > allowed_bytes) {
-                    size_t delay_ms = ((total_bytes + bytes_read - allowed_bytes) * 1000) / max_rate;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-                }
-            }
-        }
-        
-        ssize_t sent = send(data_fd, buffer, bytes_read, 0);
-        if (sent < 0) {
-            logger_->error("Error sending file data: " + std::string(strerror(errno)));
-            file.close();
+    off_t file_size = st.st_size;
+    off_t offset = static_cast<off_t>(resume_position_);
+    if (offset > 0) {
+        logger_->debug("Resuming transfer from position: " + std::to_string(resume_position_));
+        if (offset >= file_size) {
+            close(file_fd);
             close(data_fd);
-            sendResponse("426 Connection closed, transfer aborted");
+            resume_position_ = 0;
+            sendResponse("226 Transfer complete");
             return;
         }
-        total_bytes += sent;
     }
-    
-    file.close();
+    off_t remaining = file_size - offset;
+
+    auto apply_throttle = [&](size_t bytes_so_far) {
+        if (max_rate <= 0) return;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
+        if (elapsed_ms > 0) {
+            size_t allowed = static_cast<size_t>(max_rate * elapsed_ms) / 1000;
+            if (bytes_so_far > allowed) {
+                size_t delay_ms = ((bytes_so_far - allowed) * 1000) / static_cast<size_t>(max_rate);
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            }
+        }
+    };
+
+    bool transfer_ok = false;
+#if defined(__linux__)
+    if (use_sendfile && remaining > 0) {
+        while (remaining > 0) {
+            apply_throttle(total_bytes);
+            size_t chunk = static_cast<size_t>(std::min(static_cast<off_t>(buf_size), remaining));
+            ssize_t n = sendfile(data_fd, file_fd, &offset, chunk);
+            if (n < 0) {
+                logger_->error("sendfile failed: " + std::string(strerror(errno)));
+                break;
+            }
+            if (n == 0) break;
+            total_bytes += n;
+            remaining -= n;
+            if (n < static_cast<ssize_t>(chunk)) break;
+        }
+        transfer_ok = (remaining == 0);
+    }
+#elif defined(__APPLE__)
+    if (use_sendfile && remaining > 0) {
+        while (remaining > 0) {
+            apply_throttle(total_bytes);
+            off_t len = std::min(static_cast<off_t>(buf_size), remaining);
+            off_t sent = len;
+            int r = sendfile(file_fd, data_fd, offset, &sent, nullptr, 0);
+            if (r != 0 || sent <= 0) break;
+            total_bytes += sent;
+            offset += sent;
+            remaining -= sent;
+            if (sent < len) break;
+        }
+        transfer_ok = (remaining == 0);
+    }
+#endif
+
+#if !defined(_WIN32)
+    if (!transfer_ok && use_mmap && file_size > 0 && offset < file_size) {
+        size_t map_len = static_cast<size_t>(file_size);
+        void* mapped = mmap(nullptr, map_len, PROT_READ, MAP_PRIVATE, file_fd, 0);
+        if (mapped != MAP_FAILED) {
+            const char* p = static_cast<const char*>(mapped) + offset;
+            remaining = file_size - offset;
+            while (remaining > 0) {
+                apply_throttle(total_bytes);
+                size_t chunk = std::min(buf_size, static_cast<size_t>(remaining));
+                ssize_t sent = send(data_fd, p, chunk, 0);
+                if (sent <= 0) break;
+                total_bytes += sent;
+                p += sent;
+                remaining -= sent;
+            }
+            munmap(mapped, map_len);
+            transfer_ok = (remaining == 0);
+        }
+    }
+#endif
+
+    if (!transfer_ok) {
+        // Fallback: read/send loop
+        if (lseek(file_fd, offset, SEEK_SET) != static_cast<off_t>(offset)) {
+            close(file_fd);
+            close(data_fd);
+            sendResponse("550 Seek failed");
+            return;
+        }
+        std::vector<char> buffer(buf_size);
+        remaining = file_size - offset;
+        while (remaining > 0) {
+            apply_throttle(total_bytes);
+            size_t to_read = std::min(buf_size, static_cast<size_t>(remaining));
+            ssize_t n = read(file_fd, buffer.data(), to_read);
+            if (n <= 0) break;
+            ssize_t sent = send(data_fd, buffer.data(), static_cast<size_t>(n), 0);
+            if (sent <= 0) {
+                logger_->error("Error sending file data: " + std::string(strerror(errno)));
+                break;
+            }
+            total_bytes += sent;
+            remaining -= sent;
+            if (sent < n) break;
+        }
+        transfer_ok = (remaining == 0);
+    }
+
+    if (!transfer_ok && total_bytes > 0) {
+        logger_->warn("Transfer incomplete: " + filename + " (" + std::to_string(total_bytes) + " bytes sent)");
+    }
+
+    close(file_fd);
     close(data_fd);
-    resume_position_ = 0; // Reset resume position after transfer
+    resume_position_ = 0;
     logger_->info("File transfer complete: " + filename + " (" + std::to_string(total_bytes) + " bytes)");
     sendResponse("226 Transfer complete");
 }
@@ -635,7 +803,22 @@ void FTPConnection::handleSTOR(const std::string& filename) {
         sendResponse("550 Invalid path");
         return;
     }
-    
+    // Storage quota (v0.3.0)
+    uint64_t quota = 0;
+    if (current_user_ && current_user_->getStorageQuotaBytes() > 0) {
+        quota = current_user_->getStorageQuotaBytes();
+    }
+    if (current_virtual_host_ && current_virtual_host_->getStorageQuotaBytes() > 0) {
+        uint64_t host_quota = current_virtual_host_->getStorageQuotaBytes();
+        quota = (quota == 0) ? host_quota : std::min(quota, host_quota);
+    }
+    if (quota > 0 && current_user_) {
+        uint64_t current_size = getDirectorySize(current_user_->getHomeDirectory());
+        if (current_size >= quota) {
+            sendResponse("552 Storage quota exceeded");
+            return;
+        }
+    }
     sendResponse("150 Opening " + transfer_type_ + " mode data connection");
     
     // Accept data connection
@@ -812,11 +995,34 @@ bool FTPConnection::validatePath(const std::string& path) {
         return false;
     }
     
-    std::string home = current_user_->getHomeDirectory();
     std::string resolved = resolvePath(path);
     
     // Check if resolved path is within home directory
-    return isPathWithinHome(resolved);
+    if (!isPathWithinHome(resolved)) {
+        return false;
+    }
+    
+    // When virtual host is set, also constrain to host root
+    if (current_virtual_host_) {
+        std::string root = current_virtual_host_->getRootDirectory();
+        if (!root.empty()) {
+            std::filesystem::path res_p(resolved), root_p(root);
+            try {
+                std::filesystem::path canonical_res = std::filesystem::canonical(res_p);
+                std::filesystem::path canonical_root = std::filesystem::canonical(root_p);
+                auto res_it = canonical_res.begin();
+                auto root_it = canonical_root.begin();
+                for (; root_it != canonical_root.end(); ++root_it, ++res_it) {
+                    if (res_it == canonical_res.end() || *res_it != *root_it) {
+                        return false;
+                    }
+                }
+            } catch (const std::exception&) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 bool FTPConnection::isPathWithinHome(const std::string& path) {
@@ -1030,19 +1236,26 @@ void FTPConnection::handleAUTH(const std::string& method) {
     std::transform(method_upper.begin(), method_upper.end(), method_upper.begin(), ::toupper);
     
     if (method_upper == "TLS" || method_upper == "SSL") {
-        if (!ssl_enabled_ || !ssl_context_) {
-            sendResponse("534 SSL/TLS not available");
-            return;
-        }
-        
         if (ssl_active_) {
             sendResponse("534 SSL/TLS already active");
             return;
         }
-        
+        // Per-host SSL (v0.3.0): use virtual host cert if set
+        if (current_virtual_host_ && !current_virtual_host_->getSslCertFile().empty() &&
+            !current_virtual_host_->getSslKeyFile().empty()) {
+            if (!ssl_context_) {
+                ssl_context_ = std::make_shared<SSLContext>(logger_);
+            }
+            if (ssl_context_->initialize(current_virtual_host_->getSslCertFile(),
+                    current_virtual_host_->getSslKeyFile(), current_virtual_host_->getSslCaFile(), false, "")) {
+                ssl_enabled_ = true;
+            }
+        }
+        if (!ssl_enabled_ || !ssl_context_) {
+            sendResponse("534 SSL/TLS not available");
+            return;
+        }
         sendResponse("234 AUTH TLS successful");
-        
-        // Upgrade connection to SSL
         if (!upgradeToSSL()) {
             logger_->error("Failed to upgrade connection to SSL");
             active_ = false;

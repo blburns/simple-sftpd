@@ -42,6 +42,7 @@ struct LoggingConfig {
 };
 
 struct SecurityConfig {
+    int max_sessions_per_user = 0;  // 0 = unlimited (v0.3.0)
     bool require_ssl = false;
     std::string ssl_cert_file;
     std::string ssl_key_file;
@@ -57,6 +58,7 @@ struct SecurityConfig {
     std::string run_as_user = "ftp";
     std::string run_as_group = "ftp";
     bool enable_pam = false;
+    std::string user_file;  // JSON file for persistent user storage; empty = in-memory only
 };
 
 struct RateLimitConfig {
@@ -65,6 +67,12 @@ struct RateLimitConfig {
     int max_connections_per_ip = 10;
     int max_transfer_rate = 0;  // bytes per second, 0 = unlimited
     int max_transfer_rate_per_user = 0;  // bytes per second per user
+};
+
+struct TransferConfig {
+    bool use_sendfile = false;  // use sendfile() for RETR when available
+    bool use_mmap = false;      // use mmap for RETR when sendfile not used
+    size_t buffer_size = 32768;
 };
 
 class FTPServerConfig {
@@ -88,6 +96,7 @@ public:
     LoggingConfig logging;
     SecurityConfig security;
     RateLimitConfig rate_limit;
+    TransferConfig transfer;
 
 private:
     void clearErrors();

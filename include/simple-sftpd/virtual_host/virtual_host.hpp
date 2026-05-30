@@ -18,6 +18,7 @@
 
 #include <string>
 #include <memory>
+#include <map>
 
 namespace simple_sftpd {
 
@@ -40,11 +41,38 @@ public:
     std::shared_ptr<FTPUserManager> getUserManager() const { return user_manager_; }
     void setUserManager(std::shared_ptr<FTPUserManager> user_manager) { user_manager_ = user_manager; }
 
+    // Per-host SSL (v0.3.0)
+    const std::string& getSslCertFile() const { return ssl_cert_file_; }
+    const std::string& getSslKeyFile() const { return ssl_key_file_; }
+    const std::string& getSslCaFile() const { return ssl_ca_file_; }
+    void setSslCertFile(const std::string& s) { ssl_cert_file_ = s; }
+    void setSslKeyFile(const std::string& s) { ssl_key_file_ = s; }
+    void setSslCaFile(const std::string& s) { ssl_ca_file_ = s; }
+
+    // Resource isolation (v0.3.0)
+    int getMaxSessions() const { return max_sessions_; }
+    uint64_t getStorageQuotaBytes() const { return storage_quota_bytes_; }
+    uint64_t getBandwidthQuotaBytes() const { return bandwidth_quota_bytes_; }
+    void setMaxSessions(int n) { max_sessions_ = n; }
+    void setStorageQuotaBytes(uint64_t n) { storage_quota_bytes_ = n; }
+    void setBandwidthQuotaBytes(uint64_t n) { bandwidth_quota_bytes_ = n; }
+
+    // Custom error messages (v0.3.0): code e.g. "530" -> message
+    std::string getCustomError(const std::string& code) const;
+    void setCustomError(const std::string& code, const std::string& message);
+
 private:
     std::string hostname_;
     std::string root_directory_;
     bool enabled_ = true;
     std::shared_ptr<FTPUserManager> user_manager_;
+    std::string ssl_cert_file_;
+    std::string ssl_key_file_;
+    std::string ssl_ca_file_;
+    int max_sessions_ = 0;           // 0 = unlimited
+    uint64_t storage_quota_bytes_ = 0;   // 0 = unlimited
+    uint64_t bandwidth_quota_bytes_ = 0; // 0 = unlimited
+    std::map<std::string, std::string> custom_errors_;
 };
 
 } // namespace simple_sftpd

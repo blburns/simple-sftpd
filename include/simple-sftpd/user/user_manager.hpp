@@ -38,6 +38,9 @@ public:
     bool authenticateUser(const std::string& username, const std::string& password);
     std::vector<std::string> listUsers() const;
 
+    // Groups (v0.3.0)
+    std::vector<std::string> getUsersInGroup(const std::string& group) const;
+
     // User persistence
     bool loadUsers(const std::string& filename = "");
     bool saveUsers(const std::string& filename = "") const;

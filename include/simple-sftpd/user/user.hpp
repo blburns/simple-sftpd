@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <cstdint>
 
 namespace simple_sftpd {
 
@@ -39,11 +40,32 @@ public:
     bool authenticate(const std::string& password) const;
     bool hasPermission(const std::string& operation, const std::string& path) const;
 
+    // Groups (v0.3.0)
+    const std::vector<std::string>& getGroups() const { return groups_; }
+    void setGroups(const std::vector<std::string>& g) { groups_ = g; }
+    void addGroup(const std::string& g);
+    bool hasGroup(const std::string& group) const;
+
+    // Guest / expiry (v0.3.0)
+    bool isGuest() const { return is_guest_; }
+    void setGuest(bool g) { is_guest_ = g; }
+    int64_t getExpiresAt() const { return expires_at_; }
+    void setExpiresAt(int64_t t) { expires_at_ = t; }
+    bool isExpired() const;
+
+    // Per-user storage quota (v0.3.0); 0 = unlimited
+    uint64_t getStorageQuotaBytes() const { return storage_quota_bytes_; }
+    void setStorageQuotaBytes(uint64_t n) { storage_quota_bytes_ = n; }
+
 private:
     std::string username_;
     std::string password_;
     std::string home_directory_;
     std::vector<std::string> permissions_;
+    std::vector<std::string> groups_;
+    bool is_guest_ = false;
+    int64_t expires_at_ = 0;  // seconds since epoch; 0 = no expiry
+    uint64_t storage_quota_bytes_ = 0;
 };
 
 } // namespace simple_sftpd

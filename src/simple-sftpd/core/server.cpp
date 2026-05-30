@@ -25,6 +25,8 @@
 #include "simple-sftpd/utils/performance_monitor.hpp"
 #include "simple-sftpd/utils/file_cache.hpp"
 #include "simple-sftpd/security/rate_limiter.hpp"
+#include "simple-sftpd/virtual_host/virtual_host_manager.hpp"
+#include "simple-sftpd/core/session_tracker.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -61,6 +63,8 @@ FTPServer::FTPServer(std::shared_ptr<FTPServerConfig> config)
         rate_limiter_->setRateLimit(config->rate_limit.max_requests_per_minute);
         rate_limiter_->setConnectionLimit(config->rate_limit.max_connections_per_ip);
     }
+    virtual_host_manager_ = std::make_shared<FTPVirtualHostManager>(logger_);
+    session_tracker_ = std::make_shared<SessionTracker>();
 }
 
 FTPServer::~FTPServer() {
@@ -225,7 +229,7 @@ void FTPServer::serverLoop() {
 }
 
 void FTPServer::handleConnection(int client_socket) {
-    auto connection = std::make_shared<FTPConnection>(client_socket, logger_, config_);
+    auto connection = std::make_shared<FTPConnection>(client_socket, logger_, config_, virtual_host_manager_, session_tracker_);
     connection_manager_->addConnection(connection);
     connection->start();
     

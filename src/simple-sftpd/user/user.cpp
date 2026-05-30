@@ -15,6 +15,8 @@
  */
 
 #include "simple-sftpd/user/user.hpp"
+#include <chrono>
+#include <algorithm>
 
 namespace simple_sftpd {
 
@@ -23,7 +25,29 @@ FTPUser::FTPUser(const std::string& username, const std::string& password, const
 }
 
 bool FTPUser::authenticate(const std::string& password) const {
+    if (isExpired()) {
+        return false;
+    }
     return password_ == password;
+}
+
+void FTPUser::addGroup(const std::string& g) {
+    if (std::find(groups_.begin(), groups_.end(), g) == groups_.end()) {
+        groups_.push_back(g);
+    }
+}
+
+bool FTPUser::hasGroup(const std::string& group) const {
+    return std::find(groups_.begin(), groups_.end(), group) != groups_.end();
+}
+
+bool FTPUser::isExpired() const {
+    if (expires_at_ <= 0) {
+        return false;
+    }
+    int64_t now = static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+    return now > expires_at_;
 }
 
 bool FTPUser::hasPermission(const std::string& operation, const std::string& path) const {

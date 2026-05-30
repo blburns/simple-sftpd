@@ -125,6 +125,9 @@ target_sources(simple-sftpd-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/utils/compression.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/security/pam_auth.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/utils/vulnerability_scanner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/virtual_host/virtual_host.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/virtual_host/virtual_host_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/core/session_tracker.cpp
 )
 
 # Compiler options

@@ -104,6 +104,17 @@ std::vector<std::string> FTPUserManager::listUsers() const {
     return usernames;
 }
 
+std::vector<std::string> FTPUserManager::getUsersInGroup(const std::string& group) const {
+    std::lock_guard<std::mutex> lock(users_mutex_);
+    std::vector<std::string> result;
+    for (const auto& pair : users_) {
+        if (pair.second && pair.second->hasGroup(group)) {
+            result.push_back(pair.first);
+        }
+    }
+    return result;
+}
+
 void FTPUserManager::setUserFile(const std::string& filename) {
     user_file_ = filename;
 }
@@ -139,13 +150,29 @@ bool FTPUserManager::loadUsers(const std::string& filename) {
     if (root.isMember("users") && root["users"].isArray()) {
         const Json::Value& users_array = root["users"];
         for (const auto& user_json : users_array) {
-            if (user_json.isMember("username") && user_json.isMember("password") && 
+            if (user_json.isMember("username") && user_json.isMember("password") &&
                 user_json.isMember("home_directory")) {
                 std::string username = user_json["username"].asString();
                 std::string password = user_json["password"].asString();
                 std::string home_dir = user_json["home_directory"].asString();
-                
+
                 auto user = std::make_shared<FTPUser>(username, password, home_dir);
+                if (user_json.isMember("groups") && user_json["groups"].isArray()) {
+                    std::vector<std::string> groups;
+                    for (const auto& g : user_json["groups"]) {
+                        groups.push_back(g.asString());
+                    }
+                    user->setGroups(groups);
+                }
+                if (user_json.isMember("is_guest")) {
+                    user->setGuest(user_json["is_guest"].asBool());
+                }
+                if (user_json.isMember("expires_at")) {
+                    user->setExpiresAt(user_json["expires_at"].asInt64());
+                }
+                if (user_json.isMember("storage_quota_bytes")) {
+                    user->setStorageQuotaBytes(static_cast<uint64_t>(user_json["storage_quota_bytes"].asUInt64()));
+                }
                 users_[username] = user;
             }
         }
@@ -186,6 +213,14 @@ bool FTPUserManager::saveUsers(const std::string& filename) const {
             user_json["username"] = user->getUsername();
             user_json["password"] = user->getPassword(); // Note: In production, this should be hashed
             user_json["home_directory"] = user->getHomeDirectory();
+            Json::Value groups_arr(Json::arrayValue);
+            for (const auto& g : user->getGroups()) {
+                groups_arr.append(g);
+            }
+            user_json["groups"] = groups_arr;
+            user_json["is_guest"] = user->isGuest();
+            user_json["expires_at"] = static_cast<Json::Int64>(user->getExpiresAt());
+            user_json["storage_quota_bytes"] = static_cast<Json::UInt64>(user->getStorageQuotaBytes());
             users_array.append(user_json);
         }
     }

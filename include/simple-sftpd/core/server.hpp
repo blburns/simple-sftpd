@@ -31,6 +31,8 @@ class IPAccessControl;
 class PerformanceMonitor;
 class FileCache;
 class FTPRateLimiter;
+class FTPVirtualHostManager;
+class SessionTracker;
 
 class FTPServer {
 public:
@@ -53,6 +55,8 @@ private:
     std::shared_ptr<PerformanceMonitor> performance_monitor_;
     std::shared_ptr<FileCache> file_cache_;
     std::shared_ptr<FTPRateLimiter> rate_limiter_;
+    std::shared_ptr<FTPVirtualHostManager> virtual_host_manager_;
+    std::shared_ptr<SessionTracker> session_tracker_;
     
     std::atomic<bool> running_;
     std::thread server_thread_;

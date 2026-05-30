@@ -13,10 +13,12 @@ The Production Version of Simple Secure FTP Daemon (simple-sftpd) is an FTP serv
 ## What's Included
 
 - Complete FTP protocol implementation (RFC 959)
-- FTPS support (SSL/TLS)
+- FTPS support (SSL/TLS), including per-host SSL certificates (v0.3.0)
 - Passive and active mode
 - Security: authentication, path validation, chroot, privilege dropping, IP access control, rate limiting, bandwidth throttling
 - PAM authentication support
+- **Virtual hosting (v0.3.0):** HOST command, per-host root and user manager, per-host SSL, quotas, session limits, custom error messages
+- **User management (v0.3.0):** persistent user storage (JSON), groups, guest accounts with expiry, per-user storage quota
 - Multi-format configuration (JSON, YAML, INI)
 - Configuration reload (SIGHUP)
 - Cross-platform support (Linux, macOS, Windows)

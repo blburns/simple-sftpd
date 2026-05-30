@@ -149,7 +149,9 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 logging.log_to_file = (value == "true" || value == "1");
             }
         } else if (current_section == "security") {
-            if (key == "require_ssl") {
+            if (key == "max_sessions_per_user") {
+                security.max_sessions_per_user = std::stoi(value);
+            } else if (key == "require_ssl") {
                 security.require_ssl = (value == "true" || value == "1");
             } else if (key == "allow_anonymous") {
                 security.allow_anonymous = (value == "true" || value == "1");
@@ -175,6 +177,8 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 security.ssl_client_ca_file = value;
             } else if (key == "enable_pam") {
                 security.enable_pam = (value == "true" || value == "1");
+            } else if (key == "user_file") {
+                security.user_file = value;
             }
         } else if (current_section == "rate_limit") {
             if (key == "enabled") {
@@ -187,6 +191,14 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 rate_limit.max_transfer_rate = std::stoi(value);
             } else if (key == "max_transfer_rate_per_user") {
                 rate_limit.max_transfer_rate_per_user = std::stoi(value);
+            }
+        } else if (current_section == "transfer") {
+            if (key == "use_sendfile") {
+                transfer.use_sendfile = (value == "true" || value == "1");
+            } else if (key == "use_mmap") {
+                transfer.use_mmap = (value == "true" || value == "1");
+            } else if (key == "buffer_size") {
+                transfer.buffer_size = static_cast<size_t>(std::stoul(value));
             }
         }
     }
@@ -238,6 +250,9 @@ bool FTPServerConfig::loadFromJSON(const std::string& filename) {
     // Parse security section
     if (root.isMember("security")) {
         const Json::Value& sec = root["security"];
+        if (sec.isMember("max_sessions_per_user")) {
+            security.max_sessions_per_user = sec["max_sessions_per_user"].asInt();
+        }
         if (sec.isMember("require_ssl")) security.require_ssl = sec["require_ssl"].asBool();
         if (sec.isMember("allow_anonymous")) security.allow_anonymous = sec["allow_anonymous"].asBool();
         if (sec.isMember("ssl_cert_file")) security.ssl_cert_file = sec["ssl_cert_file"].asString();
@@ -251,6 +266,7 @@ bool FTPServerConfig::loadFromJSON(const std::string& filename) {
         if (sec.isMember("run_as_user")) security.run_as_user = sec["run_as_user"].asString();
         if (sec.isMember("run_as_group")) security.run_as_group = sec["run_as_group"].asString();
         if (sec.isMember("enable_pam")) security.enable_pam = sec["enable_pam"].asBool();
+        if (sec.isMember("user_file")) security.user_file = sec["user_file"].asString();
     }
     
     // Parse rate_limit section
@@ -261,6 +277,14 @@ bool FTPServerConfig::loadFromJSON(const std::string& filename) {
         if (rate.isMember("max_connections_per_ip")) rate_limit.max_connections_per_ip = rate["max_connections_per_ip"].asInt();
         if (rate.isMember("max_transfer_rate")) rate_limit.max_transfer_rate = rate["max_transfer_rate"].asInt();
         if (rate.isMember("max_transfer_rate_per_user")) rate_limit.max_transfer_rate_per_user = rate["max_transfer_rate_per_user"].asInt();
+    }
+    
+    // Parse transfer section
+    if (root.isMember("transfer")) {
+        const Json::Value& tr = root["transfer"];
+        if (tr.isMember("use_sendfile")) transfer.use_sendfile = tr["use_sendfile"].asBool();
+        if (tr.isMember("use_mmap")) transfer.use_mmap = tr["use_mmap"].asBool();
+        if (tr.isMember("buffer_size")) transfer.buffer_size = static_cast<size_t>(tr["buffer_size"].asUInt());
     }
     
     return true;
@@ -356,7 +380,9 @@ bool FTPServerConfig::loadFromYAML(const std::string& filename) {
                 logging.log_to_file = (value == "true" || value == "1");
             }
         } else if (current_section == "security") {
-            if (key == "require_ssl") {
+            if (key == "max_sessions_per_user") {
+                security.max_sessions_per_user = std::stoi(value);
+            } else if (key == "require_ssl") {
                 security.require_ssl = (value == "true" || value == "1");
             } else if (key == "allow_anonymous") {
                 security.allow_anonymous = (value == "true" || value == "1");
@@ -382,6 +408,8 @@ bool FTPServerConfig::loadFromYAML(const std::string& filename) {
                 security.run_as_group = value;
             } else if (key == "enable_pam") {
                 security.enable_pam = (value == "true" || value == "1");
+            } else if (key == "user_file") {
+                security.user_file = value;
             }
         } else if (current_section == "rate_limit") {
             if (key == "enabled") {
@@ -394,6 +422,14 @@ bool FTPServerConfig::loadFromYAML(const std::string& filename) {
                 rate_limit.max_transfer_rate = std::stoi(value);
             } else if (key == "max_transfer_rate_per_user") {
                 rate_limit.max_transfer_rate_per_user = std::stoi(value);
+            }
+        } else if (current_section == "transfer") {
+            if (key == "use_sendfile") {
+                transfer.use_sendfile = (value == "true" || value == "1");
+            } else if (key == "use_mmap") {
+                transfer.use_mmap = (value == "true" || value == "1");
+            } else if (key == "buffer_size") {
+                transfer.buffer_size = static_cast<size_t>(std::stoul(value));
             }
         }
     }
