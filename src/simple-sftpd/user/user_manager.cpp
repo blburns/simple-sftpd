@@ -227,8 +227,8 @@ bool FTPUserManager::saveUsers(const std::string& filename) const {
 
     root["users"] = users_array;
     root["version"] = "1.0";
-    root["updated"] = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    root["updated"] = static_cast<Json::Int64>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
 
     std::ofstream file(file_to_save);
     if (!file.is_open()) {
