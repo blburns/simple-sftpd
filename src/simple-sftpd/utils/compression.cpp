@@ -16,8 +16,13 @@
 
 #include "simple-sftpd/utils/compression.hpp"
 #include "simple-sftpd/utils/logger.hpp"
+#ifdef ENABLE_COMPRESSION
 #include <zlib.h>
+#ifdef HAVE_BZIP2
 #include <bzlib.h>
+#endif
+#endif
+#include <cstring>
 
 namespace simple_sftpd {
 
@@ -52,8 +57,17 @@ std::vector<uint8_t> Compression::decompress(const std::vector<uint8_t>& data, T
 bool Compression::isSupported(Type type) const {
     switch (type) {
         case Type::GZIP:
-        case Type::BZIP2:
+#ifdef ENABLE_COMPRESSION
             return true;
+#else
+            return false;
+#endif
+        case Type::BZIP2:
+#if defined(ENABLE_COMPRESSION) && defined(HAVE_BZIP2)
+            return true;
+#else
+            return false;
+#endif
         case Type::NONE:
         default:
             return true;
@@ -140,7 +154,7 @@ std::vector<uint8_t> Compression::decompressGzip(const std::vector<uint8_t>& dat
 }
 
 std::vector<uint8_t> Compression::compressBzip2(const std::vector<uint8_t>& data) {
-#ifdef ENABLE_COMPRESSION
+#if defined(ENABLE_COMPRESSION) && defined(HAVE_BZIP2)
     unsigned int dest_len = data.size() * 1.1 + 600; // Estimate
     std::vector<uint8_t> output(dest_len);
     
@@ -163,7 +177,7 @@ std::vector<uint8_t> Compression::compressBzip2(const std::vector<uint8_t>& data
 }
 
 std::vector<uint8_t> Compression::decompressBzip2(const std::vector<uint8_t>& data) {
-#ifdef ENABLE_COMPRESSION
+#if defined(ENABLE_COMPRESSION) && defined(HAVE_BZIP2)
     unsigned int dest_len = data.size() * 4; // Estimate
     std::vector<uint8_t> output(dest_len);
     

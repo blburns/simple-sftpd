@@ -103,6 +103,9 @@
           - libssl-dev
           - libjsoncpp-dev
           - libyaml-cpp-dev
+          - libpam0g-dev
+          - libbz2-dev
+          - zlib1g-dev
           - libgtest-dev
           - libgmock-dev
           - python3
@@ -124,6 +127,9 @@
           - openssl-devel
           - jsoncpp-devel
           - yaml-cpp-devel
+          - pam-devel
+          - bzip2-devel
+          - zlib-devel
           - gtest-devel
           - gmock-devel
           - python3
