@@ -15,12 +15,12 @@ ansible-playbook -i automation/ansible/inventory.ini automation/ansible/playbook
 ```
 
 Packages are organized by product version in `dist/centralized/v{VERSION}/{PRODUCT_VERSION}/`:
-- `dist/centralized/v0.1.0/production/` - Production packages
-- `dist/centralized/v0.1.0/enterprise/` - Enterprise packages
-- `dist/centralized/v0.1.0/datacenter/` - Datacenter packages
+- `dist/centralized/v0.3.0/production/` - Production packages
+- `dist/centralized/v0.3.0/enterprise/` - Enterprise packages (when built)
+- `dist/centralized/v0.3.0/datacenter/` - Datacenter packages (when built)
 
-Package naming format: `simple-sftpd-{version}-{product}-{platform}-{distro}-{arch}.{ext}`
-Example: `simple-sftpd-0.1.0-production-linux-debian-amd64.deb`
+Package naming format: `simple-sftpd-{version}-{product}-{platform}-{distro}-{arch}.{ext}`  
+Example: `simple-sftpd-0.3.0-production-linux-debian-amd64.deb`
 
 ## Directory Structure
 

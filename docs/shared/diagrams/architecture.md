@@ -5,22 +5,24 @@
 ```mermaid
 graph TB
     subgraph "Application Layer"
-        Main[main.cpp]
+        Main[main/production.cpp]
         Server[FTPServer]
     end
     
     subgraph "Connection Layer"
-        ConnMgr[FTPConnectionManager<br/>Connection Pool]
-        Connection[FTPConnection<br/>Per-Client Handler]
+        ConnMgr[FTPConnectionManager]
+        Connection[FTPConnection]
+        Sessions[SessionTracker]
     end
     
     subgraph "User Management Layer"
-        UserMgr[FTPUserManager<br/>User Operations]
-        User[FTPUser<br/>User Data]
+        UserMgr[FTPUserManager]
+        User[FTPUser]
     end
     
     subgraph "Virtual Hosting Layer"
-        VirtualHost[FTPVirtualHost<br/>Multi-Domain Support]
+        VHostMgr[FTPVirtualHostManager]
+        VirtualHost[FTPVirtualHost]
     end
     
     subgraph "Security Layer"
@@ -49,8 +51,11 @@ graph TB
     Server --> SSLContext
     
     ConnMgr --> Connection
+    Connection --> Sessions
     Connection --> UserMgr
     Connection --> VirtualHost
+    Server --> VHostMgr
+    VHostMgr --> VirtualHost
     Connection --> Logger
     Connection --> PerfMon
     Connection --> FileCache

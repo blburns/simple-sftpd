@@ -179,6 +179,8 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 security.enable_pam = (value == "true" || value == "1");
             } else if (key == "user_file") {
                 security.user_file = value;
+            } else if (key == "virtual_hosts_file") {
+                security.virtual_hosts_file = value;
             }
         } else if (current_section == "rate_limit") {
             if (key == "enabled") {
@@ -267,6 +269,7 @@ bool FTPServerConfig::loadFromJSON(const std::string& filename) {
         if (sec.isMember("run_as_group")) security.run_as_group = sec["run_as_group"].asString();
         if (sec.isMember("enable_pam")) security.enable_pam = sec["enable_pam"].asBool();
         if (sec.isMember("user_file")) security.user_file = sec["user_file"].asString();
+        if (sec.isMember("virtual_hosts_file")) security.virtual_hosts_file = sec["virtual_hosts_file"].asString();
     }
     
     // Parse rate_limit section
@@ -410,6 +413,8 @@ bool FTPServerConfig::loadFromYAML(const std::string& filename) {
                 security.enable_pam = (value == "true" || value == "1");
             } else if (key == "user_file") {
                 security.user_file = value;
+            } else if (key == "virtual_hosts_file") {
+                security.virtual_hosts_file = value;
             }
         } else if (current_section == "rate_limit") {
             if (key == "enabled") {

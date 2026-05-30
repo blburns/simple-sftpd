@@ -29,19 +29,29 @@ class Logger;
 
 class FTPVirtualHostManager {
 public:
-    explicit FTPVirtualHostManager(std::shared_ptr<Logger> logger);
+    explicit FTPVirtualHostManager(std::shared_ptr<Logger> logger,
+                                   const std::string& virtual_hosts_file = "");
     ~FTPVirtualHostManager() = default;
 
     bool addVirtualHost(std::shared_ptr<FTPVirtualHost> host);
     bool removeVirtualHost(const std::string& hostname);
     std::shared_ptr<FTPVirtualHost> getVirtualHost(const std::string& hostname);
-    
+    std::vector<std::shared_ptr<FTPVirtualHost>> getAllVirtualHosts() const;
+
     std::vector<std::string> listVirtualHosts() const;
 
+    bool loadVirtualHosts(const std::string& filename = "");
+    bool saveVirtualHosts(const std::string& filename = "") const;
+    void setVirtualHostsFile(const std::string& filename);
+    std::string getVirtualHostsFile() const { return virtual_hosts_file_; }
+
 private:
+    bool persistIfConfigured() const;
+
     std::shared_ptr<Logger> logger_;
     mutable std::mutex hosts_mutex_;
     std::map<std::string, std::shared_ptr<FTPVirtualHost>> virtual_hosts_;
+    std::string virtual_hosts_file_;
 };
 
 } // namespace simple_sftpd

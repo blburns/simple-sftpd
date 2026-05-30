@@ -14,6 +14,8 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <cstdint>
+#include <cstdlib>
 #include "simple-sftpd/core/server.hpp"
 #include "simple-sftpd/config/server_config.hpp"
 #include "simple-sftpd/utils/logger.hpp"
@@ -23,6 +25,8 @@
 #endif
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
+#include "simple-sftpd/virtual_host/virtual_host_manager.hpp"
+#include "simple-sftpd/virtual_host/virtual_host.hpp"
 
 using namespace simple_sftpd;
 
@@ -33,6 +37,109 @@ std::atomic<bool> g_shutdown_requested(false);
 
 // Forward declarations
 bool startServer(const std::string& config_file, bool daemon_mode);
+
+namespace {
+
+std::string defaultVirtualHostsFilePath() {
+#ifdef _WIN32
+    return "C:\\Program Files\\simple-sftpd\\virtual_hosts.json";
+#else
+    std::string path = "/etc/simple-sftpd/virtual_hosts.json";
+    if (!std::filesystem::exists("/etc/simple-sftpd") && access("/etc/simple-sftpd", W_OK) != 0) {
+        const char* home = getenv("HOME");
+        path = std::string(home ? home : ".") + "/.simple-sftpd/virtual_hosts.json";
+    }
+    return path;
+#endif
+}
+
+std::string resolveVirtualHostsFile(const std::string& config_file) {
+    if (!config_file.empty() && std::filesystem::exists(config_file)) {
+        auto config = std::make_shared<FTPServerConfig>();
+        if (config->loadFromFile(config_file) && !config->security.virtual_hosts_file.empty()) {
+            return config->security.virtual_hosts_file;
+        }
+    }
+    return defaultVirtualHostsFilePath();
+}
+
+struct VirtualHostCliOptions {
+    std::string hostname;
+    std::string root;
+    std::string cert;
+    std::string key;
+    std::string ca;
+    std::string user_file;
+    bool has_enabled = false;
+    bool enabled = true;
+    bool has_max_sessions = false;
+    int max_sessions = 0;
+    bool has_storage_quota = false;
+    uint64_t storage_quota = 0;
+    bool has_bandwidth_quota = false;
+    uint64_t bandwidth_quota = 0;
+};
+
+VirtualHostCliOptions parseVirtualHostOptions(const std::vector<std::string>& args, size_t start) {
+    VirtualHostCliOptions opts;
+    for (size_t i = start; i < args.size(); ++i) {
+        if (i + 1 >= args.size()) {
+            continue;
+        }
+        const std::string& flag = args[i];
+        const std::string& value = args[++i];
+        if (flag == "--hostname" || flag == "-n") {
+            opts.hostname = value;
+        } else if (flag == "--root" || flag == "-r") {
+            opts.root = value;
+        } else if (flag == "--certificate" || flag == "--cert") {
+            opts.cert = value;
+        } else if (flag == "--private-key" || flag == "--key") {
+            opts.key = value;
+        } else if (flag == "--ca-certificate" || flag == "--ca") {
+            opts.ca = value;
+        } else if (flag == "--user-file") {
+            opts.user_file = value;
+        } else if (flag == "--max-sessions") {
+            opts.has_max_sessions = true;
+            opts.max_sessions = std::stoi(value);
+        } else if (flag == "--storage-quota") {
+            opts.has_storage_quota = true;
+            opts.storage_quota = std::stoull(value);
+        } else if (flag == "--bandwidth-quota") {
+            opts.has_bandwidth_quota = true;
+            opts.bandwidth_quota = std::stoull(value);
+        } else if (flag == "--enabled") {
+            opts.has_enabled = true;
+            opts.enabled = (value == "true" || value == "1" || value == "yes");
+        }
+    }
+    return opts;
+}
+
+void printVirtualHostDetails(const std::shared_ptr<FTPVirtualHost>& host) {
+    std::cout << "  " << host->getHostname()
+              << (host->isEnabled() ? " [enabled]" : " [disabled]")
+              << std::endl;
+    std::cout << "    root: " << host->getRootDirectory() << std::endl;
+    if (!host->getSslCertFile().empty()) {
+        std::cout << "    ssl_cert: " << host->getSslCertFile() << std::endl;
+    }
+    if (!host->getSslKeyFile().empty()) {
+        std::cout << "    ssl_key: " << host->getSslKeyFile() << std::endl;
+    }
+    if (host->getMaxSessions() > 0) {
+        std::cout << "    max_sessions: " << host->getMaxSessions() << std::endl;
+    }
+    if (host->getStorageQuotaBytes() > 0) {
+        std::cout << "    storage_quota_bytes: " << host->getStorageQuotaBytes() << std::endl;
+    }
+    if (host->getUserManager() && !host->getUserManager()->getUserFile().empty()) {
+        std::cout << "    user_file: " << host->getUserManager()->getUserFile() << std::endl;
+    }
+}
+
+} // namespace
 
 // PID file path
 std::string getPidFile() {
@@ -577,25 +684,161 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
 /**
  * @brief Handle virtual host management commands
  * @param args Command arguments
+ * @param config_file Configuration file path (optional, for virtual_hosts_file)
  * @return true if successful, false otherwise
  */
-bool handleVirtualCommand(const std::vector<std::string>& args) {
+bool handleVirtualCommand(const std::vector<std::string>& args, const std::string& config_file) {
     if (args.empty()) {
-        std::cerr << "Error: virtual command requires a subcommand" << std::endl;
+        std::cerr << "Error: virtual command requires a subcommand (add, remove, modify, list, enable, disable)" << std::endl;
         return false;
     }
 
-    std::string subcommand = args[0];
-    
+    const std::string subcommand = args[0];
+    const std::string vhost_file = resolveVirtualHostsFile(config_file);
+    auto logger = std::make_shared<Logger>("", LogLevel::INFO, true, false, LogFormat::STANDARD);
+    auto manager = std::make_shared<FTPVirtualHostManager>(logger, vhost_file);
+
     if (subcommand == "list") {
-        std::cout << "Virtual hosts:" << std::endl;
-        std::cout << "  (Virtual hosting not yet implemented in v0.1.0)" << std::endl;
+        auto hosts = manager->getAllVirtualHosts();
+        if (hosts.empty()) {
+            std::cout << "No virtual hosts configured" << std::endl;
+            std::cout << "Storage file: " << manager->getVirtualHostsFile() << std::endl;
+        } else {
+            std::cout << "Virtual hosts (" << hosts.size() << "):" << std::endl;
+            for (const auto& host : hosts) {
+                printVirtualHostDetails(host);
+            }
+            std::cout << "Storage file: " << manager->getVirtualHostsFile() << std::endl;
+        }
         return true;
-    } else {
-        std::cout << "Virtual host management not yet fully implemented in v0.1.0" << std::endl;
-        std::cout << "This feature is planned for v0.3.0" << std::endl;
-        return false;
     }
+
+    VirtualHostCliOptions opts = parseVirtualHostOptions(args, 1);
+
+    if (subcommand == "add") {
+        if (opts.hostname.empty() || opts.root.empty()) {
+            std::cerr << "Error: virtual add requires --hostname and --root" << std::endl;
+            return false;
+        }
+        auto host = std::make_shared<FTPVirtualHost>(opts.hostname, opts.root);
+        if (opts.has_enabled) {
+            host->setEnabled(opts.enabled);
+        }
+        if (!opts.cert.empty()) {
+            host->setSslCertFile(opts.cert);
+        }
+        if (!opts.key.empty()) {
+            host->setSslKeyFile(opts.key);
+        }
+        if (!opts.ca.empty()) {
+            host->setSslCaFile(opts.ca);
+        }
+        if (opts.has_max_sessions) {
+            host->setMaxSessions(opts.max_sessions);
+        }
+        if (opts.has_storage_quota) {
+            host->setStorageQuotaBytes(opts.storage_quota);
+        }
+        if (opts.has_bandwidth_quota) {
+            host->setBandwidthQuotaBytes(opts.bandwidth_quota);
+        }
+        if (!opts.user_file.empty()) {
+            host->setUserManager(std::make_shared<FTPUserManager>(logger, opts.user_file));
+        }
+        if (!manager->addVirtualHost(host)) {
+            std::cerr << "Error: Failed to add virtual host '" << opts.hostname
+                      << "' (already exists or could not save to "
+                      << manager->getVirtualHostsFile() << ")" << std::endl;
+            return false;
+        }
+        std::cout << "Virtual host '" << opts.hostname << "' added" << std::endl;
+        std::cout << "Saved to: " << manager->getVirtualHostsFile() << std::endl;
+        std::cout << "Restart or reload the server for running instances to pick up changes." << std::endl;
+        return true;
+    }
+
+    if (subcommand == "remove") {
+        if (opts.hostname.empty()) {
+            std::cerr << "Error: virtual remove requires --hostname" << std::endl;
+            return false;
+        }
+        if (!manager->removeVirtualHost(opts.hostname)) {
+            std::cerr << "Error: Virtual host '" << opts.hostname << "' not found" << std::endl;
+            return false;
+        }
+        std::cout << "Virtual host '" << opts.hostname << "' removed" << std::endl;
+        std::cout << "Saved to: " << manager->getVirtualHostsFile() << std::endl;
+        return true;
+    }
+
+    if (subcommand == "enable" || subcommand == "disable") {
+        if (opts.hostname.empty()) {
+            std::cerr << "Error: virtual " << subcommand << " requires --hostname" << std::endl;
+            return false;
+        }
+        auto host = manager->getVirtualHost(opts.hostname);
+        if (!host) {
+            std::cerr << "Error: Virtual host '" << opts.hostname << "' not found" << std::endl;
+            return false;
+        }
+        host->setEnabled(subcommand == "enable");
+        if (!manager->saveVirtualHosts()) {
+            std::cerr << "Error: Failed to save virtual hosts file" << std::endl;
+            return false;
+        }
+        std::cout << "Virtual host '" << opts.hostname << "' "
+                  << (subcommand == "enable" ? "enabled" : "disabled") << std::endl;
+        return true;
+    }
+
+    if (subcommand == "modify") {
+        if (opts.hostname.empty()) {
+            std::cerr << "Error: virtual modify requires --hostname" << std::endl;
+            return false;
+        }
+        auto host = manager->getVirtualHost(opts.hostname);
+        if (!host) {
+            std::cerr << "Error: Virtual host '" << opts.hostname << "' not found" << std::endl;
+            return false;
+        }
+        if (!opts.root.empty()) {
+            host->setRootDirectory(opts.root);
+        }
+        if (opts.has_enabled) {
+            host->setEnabled(opts.enabled);
+        }
+        if (!opts.cert.empty()) {
+            host->setSslCertFile(opts.cert);
+        }
+        if (!opts.key.empty()) {
+            host->setSslKeyFile(opts.key);
+        }
+        if (!opts.ca.empty()) {
+            host->setSslCaFile(opts.ca);
+        }
+        if (opts.has_max_sessions) {
+            host->setMaxSessions(opts.max_sessions);
+        }
+        if (opts.has_storage_quota) {
+            host->setStorageQuotaBytes(opts.storage_quota);
+        }
+        if (opts.has_bandwidth_quota) {
+            host->setBandwidthQuotaBytes(opts.bandwidth_quota);
+        }
+        if (!opts.user_file.empty()) {
+            host->setUserManager(std::make_shared<FTPUserManager>(logger, opts.user_file));
+        }
+        if (!manager->saveVirtualHosts()) {
+            std::cerr << "Error: Failed to save virtual hosts file" << std::endl;
+            return false;
+        }
+        std::cout << "Virtual host '" << opts.hostname << "' updated" << std::endl;
+        std::cout << "Saved to: " << manager->getVirtualHostsFile() << std::endl;
+        return true;
+    }
+
+    std::cerr << "Error: Unknown virtual subcommand: " << subcommand << std::endl;
+    return false;
 }
 
 /**
@@ -837,7 +1080,7 @@ int main(int argc, char* argv[]) {
 
     // Handle virtual host management
     if (command == "virtual") {
-        return handleVirtualCommand(args) ? 0 : 1;
+        return handleVirtualCommand(args, config_file) ? 0 : 1;
     }
 
     // Handle SSL management

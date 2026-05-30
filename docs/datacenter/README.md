@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Datacenter Version of Simple Secure FTP Daemon extends the Enterprise Version with advanced features designed for datacenter deployments.
+The Datacenter Version extends **Enterprise** (planned) for large-scale and cloud deployments.
 
 ## Features (Planned)
 
@@ -19,5 +19,5 @@ The Datacenter Version of Simple Secure FTP Daemon extends the Enterprise Versio
 
 ---
 
-**Last Updated:** December 2024  
-**Status:** Planned
+**Last Updated:** May 2026  
+**Status:** Planned (depends on Production v0.3.0+)

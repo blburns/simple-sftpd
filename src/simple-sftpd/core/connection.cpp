@@ -225,6 +225,9 @@ void FTPConnection::handleClient() {
             sendResponse("215 UNIX Type: L8");
         } else if (command == "FEAT") {
             sendResponse("211-Features:");
+            if (virtual_host_manager_ && !virtual_host_manager_->listVirtualHosts().empty()) {
+                sendResponse(" HOST");
+            }
             if (ssl_enabled_) {
                 sendResponse(" AUTH TLS");
                 sendResponse(" PBSZ");

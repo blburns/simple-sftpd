@@ -1,27 +1,31 @@
 # Production Version Documentation
 
-**Version:** 0.1.0  
+**Version:** 0.3.0  
 **License:** Apache 2.0  
-**Status:** Production Ready
+**Status:** Feature-complete (Production line v0.1.0–v0.3.0)
 
 ---
 
 ## Overview
 
-The Production Version of Simple Secure FTP Daemon (simple-sftpd) is an FTP server suitable for small to medium deployments, with FTPS, security hardening, and multi-format configuration.
+The Production Version of Simple Secure FTP Daemon (simple-sftpd) is an FTP/FTPS server for small to medium deployments, with security hardening, virtual hosting, and multi-format configuration.
 
 ## What's Included
 
-- Complete FTP protocol implementation (RFC 959)
-- FTPS support (SSL/TLS), including per-host SSL certificates (v0.3.0)
-- Passive and active mode
-- Security: authentication, path validation, chroot, privilege dropping, IP access control, rate limiting, bandwidth throttling
-- PAM authentication support
-- **Virtual hosting (v0.3.0):** HOST command, per-host root and user manager, per-host SSL, quotas, session limits, custom error messages
-- **User management (v0.3.0):** persistent user storage (JSON), groups, guest accounts with expiry, per-user storage quota
-- Multi-format configuration (JSON, YAML, INI)
-- Configuration reload (SIGHUP)
-- Cross-platform support (Linux, macOS, Windows)
+- Complete FTP protocol (RFC 959), passive and active mode
+- FTPS (SSL/TLS), including per-host SSL certificates
+- Security: authentication, path validation, chroot, privilege dropping, IP access control, rate limiting, bandwidth throttling, PAM (Linux)
+- **Virtual hosting:** HOST command, per-host root and user manager, per-host SSL, quotas, session limits, custom error messages
+- **User management:** persistent JSON storage (`security.user_file`), groups, guest accounts with expiry, per-user storage quota
+- Transfer optimization: sendfile and memory-mapped I/O (Linux/macOS), connection pooling
+- Multi-format configuration (INI, JSON, YAML) with SIGHUP reload
+- Cross-platform: Linux, macOS, FreeBSD, Windows
+
+## Not Yet Complete
+
+- On-the-wire compression in the transfer path (class exists, not integrated)
+- `simple-sftpd virtual` CLI for add/list/modify/enable/disable/remove (JSON persistence)
+- Broader test coverage and full packaging/service verification on all platforms
 
 ## Documentation
 
@@ -36,15 +40,15 @@ The Production Version of Simple Secure FTP Daemon (simple-sftpd) is an FTP serv
 
 ## Quick Start
 
-1. Build and install (or use a package).
-2. Copy and edit a config from `config/production/` or `config/simple/`.
+1. Build and install (or use a package). See [Build Guide](../development/BUILD_GUIDE.md).
+2. Copy and edit a config from `config/production/`, `config/simple/`, or `config/advanced/`.
 3. Create directories (e.g. `/var/ftp`, `/var/log/simple-sftpd`, `/etc/simple-sftpd`).
 4. Run `simple-sftpd test --config /path/to/config` to validate.
-5. Start the service (e.g. `simple-sftpd start` or systemd/launchd).
+5. Start the service (`simple-sftpd start` or systemd/launchd).
 
 See [Deployment](deployment.md) and [Operations](operations.md) for details.
 
 ---
 
-**Last Updated:** March 2025  
-**Version:** 0.1.0
+**Last Updated:** May 2026  
+**Version:** 0.3.0

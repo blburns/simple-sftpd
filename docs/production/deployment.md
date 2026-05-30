@@ -1,6 +1,6 @@
 # Production Version Deployment Guide
 
-**Version:** 0.1.0  
+**Version:** 0.3.0  
 **License:** Apache 2.0
 
 ---
@@ -54,7 +54,7 @@ docker run -d \
   -v /var/ftp:/var/ftp \
   -v /etc/simple-sftpd:/etc/simple-sftpd \
   -v /var/log/simple-sftpd:/var/log/simple-sftpd \
-  simpledaemons/simple-sftpd:0.1.0
+  simpledaemons/simple-sftpd:0.3.0
 ```
 
 Ensure the passive port range (e.g. 49152-65535) is exposed or use a fixed range and map it.
@@ -132,5 +132,5 @@ Install the plist to `/Library/LaunchDaemons/` and load as needed (see `deployme
 
 ---
 
-**Last Updated:** March 2025  
-**Version:** 0.1.0
+**Last Updated:** May 2026  
+**Version:** 0.3.0

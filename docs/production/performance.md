@@ -1,6 +1,6 @@
 # Production Version Performance Tuning
 
-**Version:** 0.1.0  
+**Version:** 0.3.0  
 **License:** Apache 2.0
 
 ---
@@ -44,8 +44,12 @@ backlog = 500
 
 ### Transfer Settings
 
-- **Buffer size:** Larger buffers can improve throughput for large files (defaults vary; 32KB–64KB is typical).
+- **sendfile / mmap:** On Linux and macOS, RETR can use `use_sendfile` and memory-mapped I/O when enabled in config (see `config/advanced/` examples).
+- **Connection pooling:** `FTPConnectionManager` reuses connection resources where configured.
+- **File cache:** Metadata cache reduces repeated stat operations on hot paths.
+- **Buffer size:** Larger buffers can improve throughput for large files (32KB–64KB is typical).
 - **Rate limiting:** Use `max_transfer_rate` and rate_limit settings to avoid one client starving others.
+- **Compression:** The `Compression` class is implemented but not yet integrated into on-the-wire RETR/STOR.
 
 ```yaml
 transfer:
@@ -96,5 +100,5 @@ logging:
 
 ---
 
-**Last Updated:** March 2025  
-**Version:** 0.1.0
+**Last Updated:** May 2026  
+**Version:** 0.3.0

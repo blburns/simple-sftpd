@@ -35,12 +35,31 @@
 #include <errno.h>
 #include <cstring>
 #include <algorithm>
+#include <filesystem>
 #ifndef _WIN32
 #include <pwd.h>
 #include <grp.h>
+#include <unistd.h>
 #endif
 
 namespace simple_sftpd {
+
+namespace {
+
+std::string defaultVirtualHostsFilePath() {
+#ifdef _WIN32
+    return "C:\\Program Files\\simple-sftpd\\virtual_hosts.json";
+#else
+    std::string path = "/etc/simple-sftpd/virtual_hosts.json";
+    if (!std::filesystem::exists("/etc/simple-sftpd") && access("/etc/simple-sftpd", W_OK) != 0) {
+        const char* home = getenv("HOME");
+        path = std::string(home ? home : ".") + "/.simple-sftpd/virtual_hosts.json";
+    }
+    return path;
+#endif
+}
+
+} // namespace
 
 FTPServer::FTPServer(std::shared_ptr<FTPServerConfig> config)
     : config_(config), running_(false), server_socket_(-1) {
@@ -64,7 +83,10 @@ FTPServer::FTPServer(std::shared_ptr<FTPServerConfig> config)
         rate_limiter_->setRateLimit(config->rate_limit.max_requests_per_minute);
         rate_limiter_->setConnectionLimit(config->rate_limit.max_connections_per_ip);
     }
-    virtual_host_manager_ = std::make_shared<FTPVirtualHostManager>(logger_);
+    virtual_host_manager_ = std::make_shared<FTPVirtualHostManager>(
+        logger_,
+        config->security.virtual_hosts_file.empty() ? defaultVirtualHostsFilePath()
+                                                    : config->security.virtual_hosts_file);
     session_tracker_ = std::make_shared<SessionTracker>();
 }
 

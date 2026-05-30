@@ -1,6 +1,6 @@
 # Production Version Security Guide
 
-**Version:** 0.1.0  
+**Version:** 0.3.0  
 **License:** Apache 2.0
 
 ---
@@ -46,5 +46,5 @@ This guide covers security for the Production Version of Simple Secure FTP Daemo
 
 ---
 
-**Last Updated:** March 2025  
-**Version:** 0.1.0
+**Last Updated:** May 2026  
+**Version:** 0.3.0

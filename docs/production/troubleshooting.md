@@ -1,7 +1,7 @@
 # Simple Secure FTP Daemon - Troubleshooting Guide
 
-**Version:** 0.1.0  
-**Last Updated:** March 2025
+**Version:** 0.3.0  
+**Last Updated:** May 2026
 
 ---
 
@@ -81,7 +81,8 @@ tail -100 /var/log/simple-sftpd/simple-sftpd.log
 - PAM: ensure PAM config and system users are set up correctly.
 - If FTPS required: client must use AUTH TLS (or equivalent) before sending credentials.
 
-**v0.1.0 note:** Users added via CLI are in-memory only and are lost on restart. Restart requires re-adding users or using PAM.
+- Set `security.user_file` (e.g. `/etc/simple-sftpd/users.json`) so CLI-added users persist across restarts.
+- Or use PAM on Linux for system account authentication.
 
 ---
 
@@ -128,12 +129,10 @@ Run `simple-sftpd ssl status` to confirm SSL is enabled and config/cert paths ar
 
 ### Users disappear after restart
 
-In v0.1.0, local user store is in-memory only. Options:
-
-- Re-add users after each restart via CLI, or
-- Use PAM so system users are used for authentication (no persistence in simple-sftpd itself).
-
-User persistence (file or database) is planned for a future release.
+1. Confirm `security.user_file` is set in config and the path is writable by the daemon user.
+2. Check file permissions on `users.json` (e.g. root:simple-sftpd 0640).
+3. If using PAM only, local JSON users may be unused — ensure system accounts exist.
+4. Review logs for load/save errors on startup or after `user add`.
 
 ---
 
@@ -146,5 +145,5 @@ User persistence (file or database) is planned for a future release.
 
 ---
 
-**Last Updated:** March 2025  
-**Version:** 0.1.0
+**Last Updated:** May 2026  
+**Version:** 0.3.0

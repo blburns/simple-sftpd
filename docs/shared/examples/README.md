@@ -963,7 +963,7 @@ RUN apt-get update && apt-get install -y \
 
 # Clone and build Simple-Secure FTP Daemon
 WORKDIR /opt
-RUN git clone https://github.com/simple-sftpd/simple-sftpd.git
+RUN git clone https://github.com/blburns/simple-sftpd.git
 WORKDIR /opt/simple-sftpd
 RUN mkdir build && cd build \
     && cmake .. \

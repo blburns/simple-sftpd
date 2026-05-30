@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Virtual hosting (Production v0.3.0)**
   - HOST command with per-host root directory, user manager, and SSL certificates
   - Per-host session, storage, and bandwidth quotas; custom FTP error messages
+  - `simple-sftpd virtual` CLI (add, list, modify, enable, disable, remove) with JSON persistence (`security.virtual_hosts_file`)
 - **Advanced user management**
   - User groups; guest accounts with expiration
   - Persistent JSON user storage with auto load/save (`security.user_file`)
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Product version documentation updated for v0.3.0 feature-complete state
 - Build automation extended for multi-platform remote builds (Debian, RHEL, FreeBSD, macOS)
+- README, ROADMAP, and production/development docs aligned with current application state
 
 ## [0.2.0] - 2026-03-16
 

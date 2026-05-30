@@ -1,6 +1,8 @@
 # Simple Secure FTP Daemon (simple-sftpd)
 
-A secure, configurable, and feature-rich FTP server written in C++ for Linux, macOS, and Windows.
+**Production v0.3.0** · Apache 2.0
+
+A secure, configurable FTP server written in C++17 for Linux, macOS, FreeBSD, and Windows.
 
 ## Features
 
@@ -37,12 +39,12 @@ A secure, configurable, and feature-rich FTP server written in C++ for Linux, ma
 ### Performance & Monitoring
 - **Multi-threaded**: Efficient handling of multiple connections
 - **Connection Management**: Thread-safe connection tracking and cleanup
-- **Transfer Optimization**: Basic file transfers (sendfile and memory-mapped I/O in v0.2.0)
-- **Statistics**: Basic metrics (comprehensive statistics in v0.2.0)
+- **Transfer Optimization**: sendfile and memory-mapped I/O for downloads (Linux/macOS)
+- **Statistics**: Performance monitor and file metadata cache
 - **Logging**: Advanced logging with STANDARD, JSON, and EXTENDED formats
 
 ### Platform Support
-- **Cross-Platform**: Linux, macOS, and Windows
+- **Cross-Platform**: Linux, macOS, FreeBSD, and Windows
 - **Native Builds**: Optimized for each platform
 - **Package Management**: DEB, RPM, PKG, and MSI packages
 - **Service Integration**: systemd, launchd, and Windows services
@@ -55,7 +57,7 @@ The fastest way to get started with simple-sftpd is using Docker:
 
 ```bash
 # Clone the repository
-git clone https://github.com/simple-sftpd/simple-sftpd.git
+git clone https://github.com/blburns/simple-sftpd.git
 cd simple-sftpd
 
 # Quick start with Docker
@@ -73,7 +75,7 @@ nc -z localhost 21
 - ✅ **Development environment** - Full debugging tools included
 - ✅ **Multi-architecture** - x86_64, ARM64, ARMv7 support
 
-For detailed Docker deployment, see [Docker Deployment Guide](docs/deployment/docker.md).
+For detailed Docker deployment, see [Docker Deployment Guide](docs/shared/deployment/docker.md).
 
 ### Traditional Installation
 
@@ -88,7 +90,7 @@ For detailed Docker deployment, see [Docker Deployment Guide](docs/deployment/do
 
 ```bash
 # Clone the repository
-git clone https://github.com/simple-sftpd/simple-sftpd.git
+git clone https://github.com/blburns/simple-sftpd.git
 cd simple-sftpd
 
 # Build the project
@@ -122,9 +124,11 @@ brew install simple-sftpd
 simple-sftpd supports multiple configuration formats (INI, JSON, YAML) and provides example configurations for different use cases:
 
 **Configuration Formats:**
-- **INI** (`.conf`) - Traditional format, fully supported
-- **JSON** (`.json`) - Machine-readable format (parser pending)
-- **YAML** (`.yml`) - Human-readable format (parser pending)
+- **INI** (`.conf`) - Traditional format
+- **JSON** (`.json`) - Machine-readable format
+- **YAML** (`.yml`, `.yaml`) - Human-readable format
+
+Format is detected automatically from the file extension.
 
 **Example Configurations:**
 - `config/simple/` - Minimal configuration for basic setups
@@ -154,7 +158,7 @@ sudo mkdir -p /var/ftp /var/log/simple-sftpd
 sudo chown ftp:ftp /var/ftp
 ```
 
-For detailed configuration options, see [Configuration Guide](docs/configuration/README.md).
+For detailed configuration options, see [Configuration Guide](docs/shared/configuration/README.md).
 
 ### Running the Server
 
@@ -201,7 +205,7 @@ The main configuration file (`simple-sftpd.conf`) supports both INI and JSON for
 ```ini
 # Global server settings
 server_name = "Simple-Secure FTP Daemon"
-server_version = "0.1.0"
+server_version = "0.3.0"
 enable_ssl = true
 enable_virtual_hosts = true
 
@@ -394,7 +398,7 @@ simple-sftpd ssl renew --hostname DOMAIN
 
 ```bash
 # Clone and setup
-git clone https://github.com/simple-sftpd/simple-sftpd.git
+git clone https://github.com/blburns/simple-sftpd.git
 cd simple-sftpd
 
 # Install dependencies
@@ -414,30 +418,24 @@ make package    # Create packages for current platform
 
 ```
 simple-sftpd/
-├── include/simple-sftpd/     # Header files
-│   ├── ftp_server.hpp       # Main server class
-│   ├── ftp_connection.hpp   # Connection handling
-│   ├── ftp_user.hpp         # User management
-│   ├── ftp_virtual_host.hpp # Virtual host support
-│   ├── ftp_server_config.hpp # Configuration
-│   ├── logger.hpp           # Logging system
-│   └── platform.hpp         # Platform abstraction
-├── src/                     # Source files
-│   ├── core/               # Core implementation
-│   ├── utils/              # Utility functions
-│   └── main.cpp            # Main application
-├── config/                  # Configuration files
-├── tools/                   # Management tools
-├── docs/                    # Documentation
-├── scripts/                 # Build and deployment scripts
-├── deployment/              # Deployment configurations
-│   └── examples/
-│       └── docker/          # Docker deployment examples
-├── Dockerfile              # Multi-stage Docker build
-├── docker-compose.yml      # Docker Compose orchestration
-├── .dockerignore           # Docker build context optimization
-├── CMakeLists.txt          # CMake build configuration
-└── Makefile                # Make build system
+├── include/simple-sftpd/     # Public headers
+│   ├── core/                 # Server, connection, session tracking
+│   ├── config/               # Configuration parsing (INI/JSON/YAML)
+│   ├── user/                 # Users and user manager
+│   ├── virtual_host/         # Virtual hosting (HOST command)
+│   ├── security/             # SSL, PAM, rate limiting, IP access
+│   └── utils/                # Logger, compression, file cache, metrics
+├── src/simple-sftpd/         # Implementation (mirrors include/)
+├── main/production.cpp       # Production CLI entry point
+├── config/                   # Example configurations
+├── tests/                    # Google Test unit and integration tests
+├── docs/                     # User and developer documentation
+├── automation/               # Ansible build VMs and CI helpers
+├── deployment/               # Service files, Docker examples
+├── packaging/                # Platform package assets
+├── CMakeLists.txt
+├── GNUmakefile / Makefile    # Make wrappers (FreeBSD uses gmake)
+└── CHANGELOG.md
 ```
 
 ## 🐳 Docker Infrastructure
@@ -475,7 +473,7 @@ docker-compose --profile runtime up -d
 - **990/tcp** - FTPS control port (SSL/TLS)
 - **1024-65535/tcp** - Passive mode data ports
 
-For complete Docker documentation, see [Docker Deployment Guide](docs/deployment/docker.md).
+For complete Docker documentation, see [Docker Deployment Guide](docs/shared/deployment/docker.md).
 
 ### Contributing
 
@@ -676,8 +674,8 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 ## Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/simple-sftpd/simple-sftpd/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/simple-sftpd/simple-sftpd/discussions)
+- **Issues**: [GitHub Issues](https://github.com/blburns/simple-sftpd/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/blburns/simple-sftpd/discussions)
 - **Email**: SimpleDaemons
 
 ## Acknowledgments
@@ -689,16 +687,12 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 
 ## Changelog
 
-### v0.1.0 (Current - 85% Complete)
-- ✅ Core FTP server functionality with file transfers
-- ✅ Passive mode data connections
-- ✅ User authentication and management
-- ✅ CLI management interface (start, stop, restart, status, reload, test, user, virtual, ssl)
-- ✅ Path validation and security
-- ✅ Basic permission system
-- ✅ Comprehensive logging (STANDARD, JSON, EXTENDED formats)
-- ✅ Test suite (46 tests passing)
-- ✅ Multi-platform support
-- ✅ Comprehensive configuration system
-- 🔄 SSL/TLS support (v0.2.0)
-- 🔄 Virtual hosting (v0.3.0)
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
+
+| Version | Status | Highlights |
+|---------|--------|------------|
+| **v0.3.0** | Current | Virtual hosting (HOST), persistent JSON users, groups, guest accounts, session/storage quotas |
+| **v0.2.0** | Released | FTPS, PAM, chroot, active mode, resume/append/rename, connection pooling, sendfile/mmap, IPv6 |
+| **v0.1.0** | Released | Core FTP server, passive mode, multi-format config, CLI, logging, rate limiting |
+
+**Known gaps (Production polish):** on-the-wire compression not yet wired into transfers; broader test coverage and packaging verification ongoing.

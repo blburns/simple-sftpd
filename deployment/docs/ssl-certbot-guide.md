@@ -415,7 +415,7 @@ sudo chown simple-sftpd:simple-sftpd /etc/simple-sftpd/ssl/*.key
 - [SSL Troubleshooting](../troubleshooting.md)
 
 ### Community Support
-- [GitHub Issues](https://github.com/simple-sftpd/simple-sftpd/issues)
+- [GitHub Issues](https://github.com/blburns/simple-sftpd/issues)
 - [Community Forum](https://community.simple-sftpd.org)
 - [Discord Server](https://discord.gg/simple-sftpd)
 

@@ -645,4 +645,4 @@ After mastering the basic usage:
 
 ---
 
-**Need help?** Check our [Troubleshooting Guide](troubleshooting.md) or open an [issue on GitHub](https://github.com/simple-sftpd/simple-sftpd/issues).
+**Need help?** Check [Production Troubleshooting](../../production/troubleshooting.md) or open an [issue on GitHub](https://github.com/blburns/simple-sftpd/issues).

@@ -7,16 +7,15 @@ Welcome to the Simple Secure FTP Daemon documentation. This guide will help you 
 Simple Secure FTP Daemon is available in three versions, each designed for different deployment scenarios:
 
 ### 🏭 Production Version
-**License:** Apache 2.0
-**Status:** ✅ In Development
+**License:** Apache 2.0  
+**Status:** ✅ Feature-complete through v0.3.0 (v0.1.0 released 2025-11-27)  
 **Target:** Small to medium deployments, single-server installations
 
-- Complete FTP protocol implementation (RFC 959)
-- FTPS support (SSL/TLS)
-- Basic security features (authentication, ACLs)
-- Multi-format configuration (JSON, YAML, INI)
-- Hot reload configuration
-- Cross-platform support
+- Complete FTP protocol (RFC 959), passive and active mode
+- FTPS (SSL/TLS), PAM, chroot, privilege dropping, IP access control
+- Virtual hosting (HOST command), persistent JSON users, groups, guest accounts, quotas
+- Multi-format configuration (INI, JSON, YAML) with hot reload (SIGHUP)
+- Cross-platform: Linux, macOS, FreeBSD, Windows
 
 **Documentation:** [Production Version Documentation](production/README.md)
 
@@ -132,7 +131,9 @@ Documentation for developers and contributors:
 | **FTPS (SSL/TLS)** | ✅ | ✅ | ✅ |
 | **Basic Security** | ✅ | ✅ | ✅ |
 | **Multi-Format Config** | ✅ | ✅ | ✅ |
-| **Hot Reload** | ✅ | ✅ | ✅ |
+| **Hot Reload (SIGHUP)** | ✅ | ✅ | ✅ |
+| **Virtual Hosting** | ✅ | ✅ | ✅ |
+| **Persistent Users / Groups** | ✅ | ✅ | ✅ |
 | **Web Management** | ❌ | ✅ | ✅ |
 | **REST API** | ❌ | ✅ | ✅ |
 | **SNMP Integration** | ❌ | ✅ | ✅ |
@@ -199,13 +200,13 @@ We welcome contributions to improve this documentation. Please see our [Contribu
 
 If you find any issues with the documentation or have suggestions for improvement, please:
 
-1. Open an issue on [GitHub](https://github.com/SimpleDaemons/simple-sftpd/issues)
+1. Open an issue on [GitHub](https://github.com/blburns/simple-sftpd/issues)
 2. Submit a pull request with your improvements
 3. Contact us at docs@simpledaemons.com
 
 ---
 
-**Last Updated:** December 2024
-**Production Version:** In Development
-**Enterprise Version:** Planned
+**Last Updated:** May 2026  
+**Production Version:** v0.3.0 (feature-complete)  
+**Enterprise Version:** Planned  
 **Datacenter Version:** Planned

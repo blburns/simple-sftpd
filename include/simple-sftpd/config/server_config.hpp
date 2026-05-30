@@ -59,6 +59,7 @@ struct SecurityConfig {
     std::string run_as_group = "ftp";
     bool enable_pam = false;
     std::string user_file;  // JSON file for persistent user storage; empty = in-memory only
+    std::string virtual_hosts_file;  // JSON file for virtual host definitions
 };
 
 struct RateLimitConfig {

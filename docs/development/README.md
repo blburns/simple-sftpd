@@ -14,4 +14,4 @@ See [Build Guide](BUILD_GUIDE.md) for complete build instructions.
 
 ---
 
-**Last Updated:** December 2024
+**Last Updated:** May 2026

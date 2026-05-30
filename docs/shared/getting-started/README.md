@@ -1,6 +1,8 @@
 # Installation Guide
 
-This guide covers installing simple-sftpd on all supported platforms: Linux, macOS, and Windows.
+**Production version:** v0.3.0
+
+This guide covers installing simple-sftpd on supported platforms: Linux, macOS, FreeBSD, and Windows.
 
 ## 📋 Prerequisites
 
@@ -38,7 +40,7 @@ sudo apt update
 sudo apt install simple-sftpd
 
 # Or install from .deb package
-wget https://github.com/simple-sftpd/simple-sftpd/releases/latest/download/simple-sftpd_amd64.deb
+wget https://github.com/blburns/simple-sftpd/releases/latest/download/simple-sftpd_amd64.deb
 sudo dpkg -i simple-sftpd_amd64.deb
 sudo apt-get install -f  # Fix any dependency issues
 ```
@@ -46,10 +48,10 @@ sudo apt-get install -f  # Fix any dependency issues
 #### CentOS/RHEL/Fedora
 ```bash
 # Install from .rpm package
-sudo yum install https://github.com/simple-sftpd/simple-sftpd/releases/latest/download/simple-sftpd_x86_64.rpm
+sudo yum install https://github.com/blburns/simple-sftpd/releases/latest/download/simple-sftpd_x86_64.rpm
 
 # Or for newer systems
-sudo dnf install https://github.com/simple-sftpd/simple-sftpd/releases/latest/download/simple-sftpd_x86_64.rpm
+sudo dnf install https://github.com/blburns/simple-sftpd/releases/latest/download/simple-sftpd_x86_64.rpm
 ```
 
 #### macOS
@@ -58,7 +60,7 @@ sudo dnf install https://github.com/simple-sftpd/simple-sftpd/releases/latest/do
 brew install simple-sftpd
 
 # Or install from .pkg package
-curl -LO https://github.com/simple-sftpd/simple-sftpd/releases/latest/download/simple-sftpd_macos.pkg
+curl -LO https://github.com/blburns/simple-sftpd/releases/latest/download/simple-sftpd_macos.pkg
 sudo installer -pkg simple-sftpd_macos.pkg -target /
 ```
 
@@ -68,14 +70,14 @@ sudo installer -pkg simple-sftpd_macos.pkg -target /
 choco install simple-sftpd
 
 # Or download and run .msi installer
-# Download from: https://github.com/simple-sftpd/simple-sftpd/releases/latest/download/simple-sftpd_windows.msi
+# Download from: https://github.com/blburns/simple-sftpd/releases/latest/download/simple-sftpd_windows.msi
 ```
 
 ### From Source Code
 
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/simple-sftpd/simple-sftpd.git
+git clone https://github.com/blburns/simple-sftpd.git
 cd simple-sftpd
 ```
 
@@ -332,7 +334,7 @@ sudo lsof -i :21
 - **Check logs**: `/var/log/simple-sftpd/simple-sftpd.log`
 - **Configuration errors**: `simple-sftpd --test-config`
 - **Service issues**: Check system service status
-- **Community support**: [GitHub Issues](https://github.com/simple-sftpd/simple-sftpd/issues)
+- **Community support**: [GitHub Issues](https://github.com/blburns/simple-sftpd/issues)
 
 ## 🔄 Upgrading
 
@@ -374,4 +376,4 @@ After successful installation:
 
 ---
 
-**Need help?** Check our [Troubleshooting Guide](../user-guide/troubleshooting.md) or open an [issue on GitHub](https://github.com/simple-sftpd/simple-sftpd/issues).
+**Need help?** See [Production Troubleshooting](../production/troubleshooting.md) or open an [issue on GitHub](https://github.com/blburns/simple-sftpd/issues).

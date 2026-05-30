@@ -32,7 +32,7 @@ The main configuration file (`simple-sftpd.conf`) controls global server setting
 [server]
 # Server identification
 server_name = "Simple-Secure FTP Daemon"
-server_version = "0.1.0"
+server_version = "0.3.0"
 
 # Network settings
 listen_address = "0.0.0.0"
@@ -587,4 +587,4 @@ After configuring your server:
 
 ---
 
-**Need help?** Check our [Configuration Examples](../examples/README.md) or open an [issue on GitHub](https://github.com/simple-sftpd/simple-sftpd/issues).
+**Need help?** Check our [Configuration Examples](../examples/README.md) or open an [issue on GitHub](https://github.com/blburns/simple-sftpd/issues).

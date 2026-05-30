@@ -32,7 +32,7 @@ The project is organized into three product versions:
 - **Features:** All Enterprise features + Horizontal scaling, multi-site sync, cloud integrations, multi-tenant
 - **Documentation:** `docs/datacenter/`
 
-**Note:** This status document focuses on the **Production Version** which is currently in active development.
+**Note:** This status document focuses on the **Production Version**, feature-complete through v0.3.0.
 
 ## ✅ Completed Features
 
@@ -41,7 +41,7 @@ The project is organized into three product versions:
   - `FTPServer`: Main server orchestrator
   - `FTPConnection`: Individual connection handler with data connections
   - `FTPUser`: User management and authentication
-  - `FTPVirtualHost`: Virtual host support (structure ready)
+  - `FTPVirtualHost` / `FTPVirtualHostManager`: Virtual host support (v0.3.0)
   - `FTPServerConfig`: Configuration management
   - `Logger`: Comprehensive logging system
   - `Platform`: Cross-platform abstraction layer
@@ -91,7 +91,7 @@ The project is organized into three product versions:
 
 ### 6. Testing Infrastructure
 - ✅ **Google Test Integration**: Modern C++ testing framework
-- ✅ **Unit Tests**: 46 tests passing covering core components
+- ✅ **Unit Tests**: 51 tests passing covering core components
 - ✅ **Integration Tests**: Basic server and connection tests
 - ✅ **Test Coverage**: ~40% of core functionality
 - ✅ **Automated Execution**: CMake/CTest integration
@@ -126,8 +126,8 @@ The Production Version is **feature-complete through v0.3.0** (v0.1.0 released) 
 
 ## 📊 Project Metrics
 
-- **Lines of Code**: ~2,467 (source files)
-- **Test Code**: ~830 lines (46 tests)
+- **Lines of Code**: ~6,600 (headers, sources, main)
+- **Test Code**: ~900 lines (51 tests)
 - **Commands Implemented**: 15+ FTP commands
 - **Test Coverage**: ~40% (core components)
 - **Platform Support**: 3 major platforms (Linux, macOS, Windows)
@@ -140,7 +140,7 @@ The Production Version is **feature-complete through v0.3.0** (v0.1.0 released) 
 1. ✅ **File Transfers Working**: RETR and STOR fully functional through data connections
 2. ✅ **Passive Mode Complete**: Full PASV implementation with proper data socket handling
 3. ✅ **CLI Management**: All server management commands implemented
-4. ✅ **Test Suite**: 46 tests passing with good core coverage
+4. ✅ **Test Suite**: 51 tests passing with good core coverage
 5. ✅ **Security**: Path validation and permission system implemented
 6. ✅ **Documentation**: Comprehensive guides and examples
 
@@ -183,30 +183,13 @@ The Production Version is **feature-complete through v0.3.0** (v0.1.0 released) 
 - ⚠️ On-the-wire compression integration (class exists, not yet wired)
 - ⚠️ Environment/packaging verification on Linux/Windows/Docker
 
-## 🎯 Success Criteria
+## Release Status
 
-The project has successfully achieved its primary goals for v0.1.0:
-1. ✅ **Working FTP Server**: Core functionality complete
-2. ✅ **File Transfers**: RETR and STOR working
-3. ✅ **Security**: Path validation and permissions
-4. ✅ **CLI Management**: All commands implemented
-5. ✅ **Testing**: Comprehensive test suite
-6. ✅ **Documentation**: Complete guides
-7. ✅ **Cross-Platform**: Multi-platform support
+Production **v0.3.0** is the current feature-complete milestone. **v0.1.0** was released 2025-11-27; tags `v0.2.0` and `v0.3.0` mark subsequent Production milestones.
 
-## 🚀 Ready for Release
-
-The Simple FTP Daemon project is **ready for production release** (v0.1.0) with:
-- A working FTP server with file transfers
-- Complete CLI management interface
-- Comprehensive test suite
-- Security features
-- Professional documentation
-- Deployment automation
-
-**For release:** Use [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Production documentation (deployment, operations, performance, security, troubleshooting) is in place for v0.1.0.
+**Before next release:** See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) and [VERIFICATION.md](VERIFICATION.md) for compression integration, test expansion, and packaging checks.
 
 ---
 
 *Last Updated: May 2026*  
-*Project Status: Production Version – Feature-complete through v0.3.0 (v0.1.0 released)*
+*Project Status: Production Version – Feature-complete through v0.3.0*

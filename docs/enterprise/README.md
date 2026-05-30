@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Enterprise Version of Simple Secure FTP Daemon extends the Production Version with advanced features designed for enterprise deployments.
+The Enterprise Version extends **Production v0.3.0** with features for large deployments.
 
 ## Features (Planned)
 
@@ -20,5 +20,5 @@ The Enterprise Version of Simple Secure FTP Daemon extends the Production Versio
 
 ---
 
-**Last Updated:** December 2024  
-**Status:** Planned
+**Last Updated:** May 2026  
+**Production baseline:** v0.3.0

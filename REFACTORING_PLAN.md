@@ -1,6 +1,6 @@
 # Code Reorganization Plan - Modular Structure
 
-**Status:** 🔄 **IN PROGRESS** - December 2024
+**Status:** ✅ **COMPLETE** (May 2026) — source reorganized under `include/simple-sftpd/` and `src/simple-sftpd/` by domain (core, config, user, virtual_host, security, utils).
 
 ## Current Structure
 ```
