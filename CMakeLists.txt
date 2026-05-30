@@ -23,6 +23,17 @@ elseif(UNIX)
     set(PLATFORM_NAME "Linux")
 endif()
 
+include(GNUInstallDirs)
+
+# Linux packages follow FHS: /usr/bin, /etc/simple-sftpd, systemd under /usr/lib
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+        set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install prefix" FORCE)
+    endif()
+    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "System config directory" FORCE)
+endif()
+
+set(SIMPLE_SFTPD_CONFIG_DIR "${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}")
 # Build options
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(ENABLE_TESTS "Enable tests" ON)
@@ -216,10 +227,20 @@ install(DIRECTORY include/
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
-# Install configuration files
+# Install configuration files under /etc/simple-sftpd (Linux) or ${prefix}/etc/... (macOS/FreeBSD)
+install(FILES config/production/simple-sftpd.conf
+    DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}
+    RENAME simple-sftpd.conf
+)
 install(DIRECTORY config/
-    DESTINATION etc/${PROJECT_NAME}
-    FILES_MATCHING PATTERN "*.conf" PATTERN "*.example"
+    DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}
+    FILES_MATCHING
+        PATTERN "*.conf"
+        PATTERN "*.example"
+        PATTERN "*.json"
+        PATTERN "*.yml"
+        PATTERN "*.yaml"
+        PATTERN "README.md" EXCLUDE
 )
 
 # Install service files
