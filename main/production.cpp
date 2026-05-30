@@ -17,6 +17,10 @@
 #include "simple-sftpd/core/server.hpp"
 #include "simple-sftpd/config/server_config.hpp"
 #include "simple-sftpd/utils/logger.hpp"
+
+#ifndef SIMPLE_SFTPD_VERSION
+#define SIMPLE_SFTPD_VERSION "0.3.0"
+#endif
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
 
@@ -168,7 +172,7 @@ void printUsage() {
  * @brief Print version information
  */
 void printVersion() {
-    std::cout << "simple-sftpd v0.1.0" << std::endl;
+    std::cout << "simple-sftpd v" << SIMPLE_SFTPD_VERSION << std::endl;
     std::cout << "Simple FTP Daemon for Linux, macOS, and Windows" << std::endl;
     std::cout << "Copyright (c) 2024 SimpleDaemons" << std::endl;
 }
@@ -734,7 +738,7 @@ bool startServer(const std::string& config_file, bool daemon_mode) {
             log_format
         );
 
-        g_logger->info("Starting Simple FTP Daemon v0.1.0");
+        g_logger->info(std::string("Starting Simple FTP Daemon v") + SIMPLE_SFTPD_VERSION);
         g_logger->info("Configuration file: " + config_file);
 
         // Create and start server

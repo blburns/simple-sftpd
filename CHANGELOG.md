@@ -5,6 +5,38 @@ All notable changes to simple-sftpd will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-30
+
+### Added
+- **Virtual hosting (Production v0.3.0)**
+  - HOST command with per-host root directory, user manager, and SSL certificates
+  - Per-host session, storage, and bandwidth quotas; custom FTP error messages
+- **Advanced user management**
+  - User groups; guest accounts with expiration
+  - Persistent JSON user storage with auto load/save (`security.user_file`)
+  - SessionTracker for per-user and per-host concurrent session limits
+- **Transfer performance**
+  - sendfile and memory-mapped I/O paths for RETR (Linux/macOS)
+  - Connection pool support in FTPConnectionManager
+
+### Changed
+- Product version documentation updated for v0.3.0 feature-complete state
+- Build automation extended for multi-platform remote builds (Debian, RHEL, FreeBSD, macOS)
+
+## [0.2.0] - 2026-03-16
+
+### Added
+- **Security & performance (Production v0.2.0)**
+  - Connection pooling, file metadata cache, vulnerability scanner
+  - IPv6 dual-stack listening; audit logging for auth and file operations
+  - Bandwidth throttling on uploads and downloads
+- **Transfer operations**
+  - APPE, REST resume, RNFR/RNTO rename
+  - Active mode (PORT) data connections
+
+### Changed
+- ROADMAP and project docs mark Production v0.2.0 security/performance items complete
+
 ## [0.1.0] - 2025-11-27
 
 ### Added
@@ -143,6 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.3.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.3.0
+[0.2.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.2.0
 [0.1.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.1.0
 [0.1.0-alpha]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.1.0-alpha
 

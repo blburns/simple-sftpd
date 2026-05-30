@@ -3,7 +3,7 @@
 # Copyright 2024 SimpleDaemons
 
 cmake_minimum_required(VERSION 3.16)
-project(simple-sftpd VERSION 0.1.0 LANGUAGES CXX)
+project(simple-sftpd VERSION 0.3.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -126,6 +126,10 @@ file(GLOB_RECURSE HEADERS "include/*.hpp" "include/*.h")
 
 # Create executable with version-specific main
 add_executable(${PROJECT_NAME} ${SOURCES} ${MAIN_SOURCE} ${HEADERS})
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    SIMPLE_SFTPD_VERSION="${PROJECT_VERSION}"
+)
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} Threads::Threads)
