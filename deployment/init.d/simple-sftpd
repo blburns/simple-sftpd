@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+# simple-sftpd    Simple Secure FTP Daemon
+#
+# chkconfig: 2345 85 15
+# description: Simple Secure FTP Daemon (simple-sftpd)
+
+### BEGIN INIT INFO
+# Provides:          simple-sftpd
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Simple Secure FTP Daemon
+# Description:       Simple Secure FTP Daemon (simple-sftpd)
+### END INIT INFO
+
+NAME=simple-sftpd
+DAEMON=/usr/bin/simple-sftpd
+CONFIG=/etc/simple-sftpd/simple-sftpd.conf
+PIDFILE=/var/run/simple-sftpd.pid
+
+[ -x "$DAEMON" ] || exit 0
+
+if [ -f /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+elif [ -f /etc/rc.d/init.d/functions ]; then
+    . /etc/rc.d/init.d/functions
+fi
+
+is_running() {
+    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+start() {
+    if [ ! -f "$CONFIG" ]; then
+        echo "Configuration file not found: $CONFIG"
+        return 1
+    fi
+
+    if is_running; then
+        echo "$NAME is already running"
+        return 1
+    fi
+
+    echo -n "Starting $NAME: "
+    if "$DAEMON" --daemon start --config "$CONFIG"; then
+        echo "OK"
+        return 0
+    fi
+    echo "FAILED"
+    return 1
+}
+
+stop() {
+    echo -n "Stopping $NAME: "
+    if "$DAEMON" stop; then
+        echo "OK"
+        return 0
+    fi
+    echo "FAILED"
+    return 1
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+reload() {
+    echo -n "Reloading $NAME: "
+    if "$DAEMON" reload; then
+        echo "OK"
+        return 0
+    fi
+    echo "FAILED"
+    return 1
+}
+
+status() {
+    "$DAEMON" status --config "$CONFIG"
+}
+
+configtest() {
+    "$DAEMON" test-config --config "$CONFIG"
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) restart ;;
+    reload)  reload ;;
+    status)  status ;;
+    configtest|test-config) configtest ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload|status|configtest}"
+        exit 1
+        ;;
+esac
+
+exit $?

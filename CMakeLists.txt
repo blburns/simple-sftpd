@@ -243,8 +243,15 @@ install(DIRECTORY config/
         PATTERN "README.md" EXCLUDE
 )
 
-# Install service files
-if(UNIX AND NOT APPLE)
+# Install service files (systemd + SysV init.d on Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(FILES deployment/systemd/${PROJECT_NAME}.service
+        DESTINATION lib/systemd/system
+    )
+    install(PROGRAMS deployment/init.d/${PROJECT_NAME}
+        DESTINATION /etc/init.d
+    )
+elseif(UNIX AND NOT APPLE)
     install(FILES deployment/systemd/${PROJECT_NAME}.service
         DESTINATION lib/systemd/system
     )
