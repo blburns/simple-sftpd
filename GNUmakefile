@@ -194,11 +194,38 @@ ifeq ($(PLATFORM),macos)
 else ifeq ($(PLATFORM),linux)
 	@echo "Building Linux packages..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G RPM
-	cd $(BUILD_DIR) && cpack -G DEB
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm $(DIST_DIR)/ 2>/dev/null || true
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb $(DIST_DIR)/ 2>/dev/null || true
-	@echo "Linux packages created: RPM and DEB"
+	@built=0; \
+	if command -v rpmbuild >/dev/null 2>&1; then \
+		echo "Building RPM package..."; \
+		cd $(BUILD_DIR) && cpack -G RPM; \
+		mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm $(DIST_DIR)/ 2>/dev/null || true; \
+		built=1; \
+	else \
+		echo "Skipping RPM (rpmbuild not found; install rpm-build on RHEL/Fedora)"; \
+	fi; \
+	if command -v dpkg >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then \
+		echo "Building DEB package..."; \
+		cd $(BUILD_DIR) && cpack -G DEB; \
+		mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb $(DIST_DIR)/ 2>/dev/null || true; \
+		built=1; \
+	else \
+		echo "Skipping DEB (dpkg/dpkg-deb not found; install dpkg-dev on Debian/Ubuntu)"; \
+	fi; \
+	if [ "$$built" -eq 0 ]; then \
+		echo "Error: no packaging tools found. Run 'make deps' or use 'make package-deb' / 'make package-rpm'."; \
+		exit 1; \
+	fi
+	@echo "Linux packages created in $(DIST_DIR)/"
+else ifeq ($(PLATFORM),freebsd)
+	@echo "Building FreeBSD packages..."
+	@mkdir -p $(DIST_DIR)
+	cd $(BUILD_DIR) && cpack -G TGZ
+	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz $(DIST_DIR)/ 2>/dev/null || true
+	@if ! ls $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz >/dev/null 2>&1; then \
+		echo "Error: TGZ package not created. Re-run 'cd build && cmake ..' then 'make package'."; \
+		exit 1; \
+	fi
+	@echo "FreeBSD package created in $(DIST_DIR)/"
 else ifeq ($(PLATFORM),windows)
 	@echo "Building Windows packages..."
 	@$(MKDIR) $(DIST_DIR)
@@ -276,6 +303,16 @@ else ifeq ($(PLATFORM),linux)
 	@cd $(DIST_DIR) && tar -czf $(PROJECT_NAME)-$(VERSION)-static-linux.tar.gz $(PROJECT_NAME)-$(VERSION)-static-linux/
 	@rm -rf $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-linux
 	@echo "Linux static binary package created: $(PROJECT_NAME)-$(VERSION)-static-linux.tar.gz"
+else ifeq ($(PLATFORM),freebsd)
+	@echo "Creating FreeBSD static binary TAR.GZ..."
+	@mkdir -p $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd
+	@cp $(BUILD_DIR)/$(PROJECT_NAME) $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd/
+	@cp README.md $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd/
+	@cp LICENSE $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd/
+	@cp -r config $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd/
+	@cd $(DIST_DIR) && tar -czf $(PROJECT_NAME)-$(VERSION)-static-freebsd.tar.gz $(PROJECT_NAME)-$(VERSION)-static-freebsd/
+	@rm -rf $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-static-freebsd
+	@echo "FreeBSD static binary package created: $(PROJECT_NAME)-$(VERSION)-static-freebsd.tar.gz"
 else
 	@echo "Static binary package generation not supported on this platform"
 endif
@@ -406,17 +443,20 @@ else ifeq ($(PLATFORM),linux)
 		sudo apt-get update && sudo apt-get install -y \
 			build-essential cmake pkg-config git \
 			libssl-dev libjsoncpp-dev libyaml-cpp-dev \
-			libpam0g-dev libbz2-dev zlib1g-dev; \
+			libpam0g-dev libbz2-dev zlib1g-dev \
+			dpkg-dev; \
 	elif command -v dnf >/dev/null 2>&1; then \
 		sudo dnf install -y \
 			gcc-c++ cmake pkgconfig git \
 			openssl-devel jsoncpp-devel yaml-cpp-devel \
-			pam-devel bzip2-devel zlib-devel; \
+			pam-devel bzip2-devel zlib-devel \
+			rpm-build; \
 	elif command -v yum >/dev/null 2>&1; then \
 		sudo yum install -y \
 			gcc-c++ cmake pkgconfig git \
 			openssl-devel jsoncpp-devel yaml-cpp-devel \
-			pam-devel bzip2-devel zlib-devel; \
+			pam-devel bzip2-devel zlib-devel \
+			rpm-build; \
 	else \
 		echo "No supported package manager found (apt-get, dnf, yum, or pkg)"; \
 		exit 1; \
@@ -613,6 +653,8 @@ ifeq ($(PLATFORM),macos)
 else ifeq ($(PLATFORM),linux)
 	@echo "  package-rpm      - Build RPM package (Linux only)"
 	@echo "  package-deb      - Build DEB package (Linux only)"
+else ifeq ($(PLATFORM),freebsd)
+	@echo "  package-tgz      - Build TGZ package (FreeBSD only)"
 else ifeq ($(PLATFORM),windows)
 	@echo "  package-msi      - Build MSI package (Windows only)"
 	@echo "  package-zip      - Build ZIP package (Windows only)"
@@ -730,6 +772,10 @@ package-all: package package-source
 # Individual package targets for each format
 package-deb: build
 ifeq ($(PLATFORM),linux)
+	@if ! command -v dpkg >/dev/null 2>&1 || ! command -v dpkg-deb >/dev/null 2>&1; then \
+		echo "Error: dpkg/dpkg-deb not found. Install dpkg-dev (Debian/Ubuntu) or run 'make deps'."; \
+		exit 1; \
+	fi
 	@echo "Building DEB package..."
 	@mkdir -p $(DIST_DIR)
 	cd $(BUILD_DIR) && cpack -G DEB
@@ -741,6 +787,10 @@ endif
 
 package-rpm: build
 ifeq ($(PLATFORM),linux)
+	@if ! command -v rpmbuild >/dev/null 2>&1; then \
+		echo "Error: rpmbuild not found. Install rpm-build (RHEL/Fedora) or run 'make deps'."; \
+		exit 1; \
+	fi
 	@echo "Building RPM package..."
 	@mkdir -p $(DIST_DIR)
 	cd $(BUILD_DIR) && cpack -G RPM
@@ -794,6 +844,17 @@ else
 	@echo "PKG packages are only supported on macOS"
 endif
 
+package-tgz: build
+ifeq ($(PLATFORM),freebsd)
+	@echo "Building FreeBSD TGZ package..."
+	@mkdir -p $(DIST_DIR)
+	cd $(BUILD_DIR) && cpack -G TGZ
+	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz $(DIST_DIR)/
+	@echo "TGZ package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz"
+else
+	@echo "TGZ install packages are only supported on FreeBSD (use package-source for source tarballs)"
+endif
+
 # Show package information
 package-info:
 	@echo "Package Information for $(PROJECT_NAME) $(VERSION)"
@@ -806,6 +867,10 @@ package-info:
 ifeq ($(PLATFORM),linux)
 	@echo "  - DEB (Debian/Ubuntu)"
 	@echo "  - RPM (Red Hat/CentOS/Fedora)"
+	@echo "  - TAR.GZ (Source)"
+	@echo "  - ZIP (Source)"
+else ifeq ($(PLATFORM),freebsd)
+	@echo "  - TGZ (FreeBSD install tree)"
 	@echo "  - TAR.GZ (Source)"
 	@echo "  - ZIP (Source)"
 else ifeq ($(PLATFORM),macos)
@@ -828,6 +893,7 @@ endif
 	@echo "  make package-msi      - Create MSI package (Windows only)"
 	@echo "  make package-dmg      - Create DMG package (macOS only)"
 	@echo "  make package-pkg      - Create PKG package (macOS only)"
+	@echo "  make package-tgz      - Create TGZ package (FreeBSD only)"
 
 # Legacy targets for backward compatibility
 debug: dev-build

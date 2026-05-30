@@ -285,7 +285,20 @@ if(ENABLE_PACKAGING)
         set(CPACK_PRODUCTBUILD_IDENTIFIER "com.simpledaemons.${PROJECT_NAME}")
         set(CPACK_PRODUCTBUILD_PACKAGE_NAME "${PROJECT_NAME}")
         
-    else()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+        # FreeBSD binary tarball (install tree)
+        set(CPACK_GENERATOR "TGZ")
+        set(PLATFORM_ID "freebsd")
+
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64|x86_64")
+            set(PACKAGE_ARCH "amd64")
+        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+            set(PACKAGE_ARCH "arm64")
+        else()
+            set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+        endif()
+
+    elseif(UNIX)
         # Linux DEB and RPM packages
         set(CPACK_GENERATOR "DEB;RPM")
         
@@ -337,7 +350,7 @@ if(ENABLE_PACKAGING)
             else()
                 set(PLATFORM_ID "macos-intel")
             endif()
-        elseif(UNIX)
+        else()
             # Try to detect Linux distribution for proper naming
             set(PLATFORM_ID "linux-generic")  # Default for RPM-based
             if(EXISTS "/etc/os-release")
@@ -354,8 +367,6 @@ if(ENABLE_PACKAGING)
                     endif()
                 endif()
             endif()
-        else()
-            set(PLATFORM_ID "${PLATFORM_NAME}")
         endif()
     endif()
     
@@ -365,16 +376,15 @@ if(ENABLE_PACKAGING)
         # macOS packages: simple-sftpd-0.2.1-production-macos-intel.dmg / .pkg
         set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}")
     elseif(UNIX)
-        # Linux packages: simple-sftpd-0.2.1-production-linux-debian-amd64.deb / .rpm
-        # CPack automatically adds architecture for DEB/RPM, so we set the base name
+        # Linux/FreeBSD packages: simple-sftpd-0.3.0-production-linux-debian-amd64.deb / .rpm
+        # FreeBSD TGZ: simple-sftpd-0.3.0-production-freebsd-amd64.tar.gz
         set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
         
-        # Override DEB and RPM file names to match our format
-        # CPack format: {CPACK_PACKAGE_FILE_NAME}_{CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb
-        # We want: {name}-{version}-{product}-{platform}-{arch}.deb (architecture already in CPACK_PACKAGE_FILE_NAME)
-        # So we remove architecture from CPACK_DEBIAN_FILE_NAME pattern
-        set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
-        set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        if(NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+            # Override DEB and RPM file names to match our format
+            set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+            set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        endif()
     else()
         # Windows and others
         set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_NAME}-${PACKAGE_ARCH}")

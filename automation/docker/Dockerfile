@@ -22,6 +22,7 @@ FROM base-builder AS ubuntu-builder
 RUN apt-get update && apt-get install -y \
     libssl-dev \
     libjsoncpp-dev \
+    dpkg-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set build environment
@@ -51,6 +52,7 @@ RUN yum update -y && yum install -y \
     openssl-devel \
     jsoncpp-devel \
     pkgconfig \
+    rpm-build \
     && yum clean all
 
 # Set build environment
