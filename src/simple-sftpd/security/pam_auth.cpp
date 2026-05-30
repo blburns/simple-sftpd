@@ -20,6 +20,7 @@
 #ifdef HAVE_PAM
 #include <security/pam_appl.h>
 #include <cstdlib>
+#include <string.h>
 #endif
 
 namespace simple_sftpd {
