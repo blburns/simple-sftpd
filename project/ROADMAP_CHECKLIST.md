@@ -4,16 +4,16 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 ## 📊 Overall Progress
 
-**Current Version:** 0.1.0 (Production)  
-**Overall Progress:** 95% Complete (Production Version)  
-**Status:** ✅ **RELEASED** - v0.1.0 Foundation Release (Production)
+**Current Version:** 0.3.0 (Production)  
+**Overall Progress:** Production line feature-complete (v0.1.0–v0.3.0)  
+**Status:** ✅ **RELEASED** - v0.1.0 Foundation Release; v0.2.0 and v0.3.0 feature work complete
 
 **Product Versions:**
-- 🏭 **Production** (Apache 2.0): ✅ In Development - 95% Complete
+- 🏭 **Production** (Apache 2.0): ✅ Feature-complete through v0.3.0
 - 🏢 **Enterprise** (BSL 1.1): ⏳ Planned - 0% Complete
 - 🏛️ **Datacenter** (BSL 1.1): ⏳ Planned - 0% Complete
 
-**Honest Assessment:** We have a working FTP server with core functionality implemented. File transfers work through passive mode data connections, all basic FTP commands are functional, CLI management is complete, and we have a comprehensive test suite. The server is nearly ready for v0.1.0 release.
+**Honest Assessment:** We have a working FTP server with the full Production feature set implemented. File transfers work through both passive and active mode data connections, all core FTP commands are functional, FTPS/SSL is integrated, security hardening (PAM, chroot, privilege dropping, IP access control, rate limiting) is in place, and advanced features — virtual hosting, per-host/per-user quotas, session limits, groups, guest accounts, and persistent (JSON) user storage — are implemented. Remaining production work is on-the-wire compression integration, broader test coverage, and environment/packaging verification.
 
 ---
 
@@ -21,8 +21,8 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 **License:** Apache 2.0  
 **Target:** Small to medium deployments, single-server installations  
-**Status:** ✅ In Development  
-**Current Progress:** 95% Complete
+**Status:** ✅ Feature-complete through v0.3.0  
+**Current Progress:** v0.1.0 released; v0.2.0 and v0.3.0 complete
 
 ### Version 0.1.0 - Foundation Release
 
@@ -306,34 +306,51 @@ This document provides a detailed checklist for tracking progress on the simple-
 - [x] **Connection Pooling** - Optimized connection management (v0.2.0)
   - ✅ FTPConnectionManager: acquireConnection(), releaseConnection(), setPoolSize()
   - ✅ connection_pool_, pool maintenance loop
-- [ ] **Memory-mapped I/O** - Efficient large file handling (v0.2.0)
-  - ⚠️ Config options (use_mmap, use_sendfile) exist; not yet used in transfer path
+- [x] **Memory-mapped I/O** - Efficient large file handling (v0.2.0)
+  - ✅ TransferConfig (use_sendfile, use_mmap, buffer_size) parsed from INI/JSON/YAML
+  - ✅ handleRETR: sendfile() on Linux/macOS, mmap+send fallback, read/send fallback; throttling preserved
 - [ ] **Compression Support** - gzip, bzip2 compression (v0.2.0)
   - ✅ Compression class implemented (90% complete)
-  - ❌ Not yet integrated into file transfer operations
+  - ⚠️ Integration point ready; MODE Z / on-the-fly compression in transfers planned for later
 
 ---
 
 ### Version 0.3.0 - Virtual Hosting (Production)
 
 **Target:** Q2 2025  
-**Status:** ⏳ **PLANNED**  
-**Progress:** 20% (structure only)
+**Status:** ✅ **COMPLETE**  
+**Progress:** 100%
 
 #### Virtual Hosting
-- [ ] **Multi-domain Support** - Multiple FTP sites on one server
-- [ ] **Per-host Configuration** - Individual settings per domain
-- [ ] **SSL Certificate Management** - Separate certificates per host
-- [ ] **Resource Isolation** - Separate quotas and limits
-- [ ] **Dynamic Configuration** - Runtime host management
-- [ ] **Custom Error Pages** - Branded error responses
+- [x] **Multi-domain Support** - Multiple FTP sites on one server
+  - ✅ HOST command: client sends HOST &lt;hostname&gt;; server selects FTPVirtualHost
+- [x] **Per-host Configuration** - Individual settings per domain
+  - ✅ Per-host root directory and per-host user manager (FTPVirtualHost)
+  - ✅ Path validation constrained to virtual host root
+- [x] **SSL Certificate Management** - Separate certificates per host
+  - ✅ FTPVirtualHost: ssl_cert_file, ssl_key_file, ssl_ca_file; AUTH TLS uses host cert when set
+- [x] **Resource Isolation** - Separate quotas and limits
+  - ✅ Per-host: max_sessions, storage_quota_bytes, bandwidth_quota_bytes
+  - ✅ Per-user: storage_quota_bytes; STOR rejected when quota exceeded
+- [x] **Dynamic Configuration** - Runtime host management
+  - ✅ FTPVirtualHostManager add/remove/get/list; HOST at runtime
+- [x] **Custom Error Pages** - Branded error responses
+  - ✅ FTPVirtualHost::setCustomError(code, message); sendResponse substitutes when set
 
 #### Advanced User Management (Production)
-- [ ] **Group Management** - User groups and inheritance
-- [ ] **Quota System** - Storage and bandwidth limits
-- [ ] **Session Management** - Concurrent session limits
-- [ ] **Guest Accounts** - Temporary access accounts
-- [ ] **Persistent User Storage** - Database/file-based user management
+- [x] **Group Management** - User groups and inheritance
+  - ✅ FTPUser: groups_, addGroup(), hasGroup(), getGroups(); FTPUserManager::getUsersInGroup()
+  - ✅ Load/save groups in users JSON
+- [x] **Quota System** - Storage and bandwidth limits
+  - ✅ Per-user and per-host storage_quota_bytes; getDirectorySize(); STOR checks before upload
+- [x] **Session Management** - Concurrent session limits
+  - ✅ SessionTracker: per-user and per-host counts; config max_sessions_per_user; vhost max_sessions
+  - ✅ Register on PASS, unregister on disconnect; reject login when over limit
+- [x] **Guest Accounts** - Temporary access accounts
+  - ✅ FTPUser: is_guest, expires_at; isExpired(); authenticate() rejects when expired
+  - ✅ Load/save in users JSON
+- [x] **Persistent User Storage** - Database/file-based user management
+  - ✅ security.user_file config; load/save JSON in FTPUserManager; connection uses config path
 
 ---
 
@@ -749,9 +766,9 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 | Product Version | Version | Target Date | Status | Progress | Key Features |
 |----------------|---------|-------------|--------|----------|--------------|
-| **Production** | 0.1.0 | Q1 2025 | ✅ Released | 90% | Foundation, Core FTP, Data Connections |
+| **Production** | 0.1.0 | Q1 2025 | ✅ Released | 95% | Foundation, Core FTP, Data Connections |
 | **Production** | 0.2.0 | Q2 2025 | ✅ Complete | 100% | SSL/TLS, Advanced Security, Performance |
-| **Production** | 0.3.0 | Q2 2025 | ⏳ Planned | 20% | Virtual Hosting |
+| **Production** | 0.3.0 | Q2 2025 | ✅ Complete | 100% | Virtual Hosting, Advanced User Management |
 | **Enterprise** | 0.1.0 | Q3 2025 | ⏳ Planned | 0% | Web UI, REST API, Management Interface |
 | **Enterprise** | 0.2.0 | Q3 2025 | ⏳ Planned | 0% | High Availability, Clustering |
 | **Enterprise** | 0.3.0 | Q4 2025 | ⏳ Planned | 0% | SNMP, Integrations, Plugins |
@@ -787,7 +804,7 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 ---
 
-*Last Updated: February 2025*  
-*Next Review: February 2025*  
+*Last Updated: May 2026*  
+*Next Review: Before Enterprise v0.1.0 kickoff*  
 *Maintained by: SimpleDaemons Development Team*  
 *See [PROGRESS_REPORT.md](PROGRESS_REPORT.md) for detailed honest assessment*

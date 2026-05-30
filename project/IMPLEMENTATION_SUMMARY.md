@@ -1,16 +1,17 @@
 # Implementation Summary - Recent Improvements
-**Date:** February 2025  
-**Session:** Major Feature Completion Sprint  
+**Date:** May 2026  
 **Product Version:** Production Version (Apache 2.0)
 
 ## 🎯 Overview
 
-This document summarizes the major improvements and feature completions made in this development session, bringing the **Production Version** from ~75% to **87% completion** for v0.1.0.
+This document summarizes the major improvements and feature completions for the **Production Version**. The v0.1.0 foundation has been released, and the v0.2.0 (security/performance) and v0.3.0 (virtual hosting, advanced user management) feature work is complete. The original v0.1.0 completion sprint (~75% → 87%) is recorded below, followed by the v0.2.0/v0.3.0 summary.
 
 **Product Versions:**
-- **🏭 Production Version (Apache 2.0):** ✅ 87% Complete - In Development
+- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (v0.1.0 released)
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
+
+> **Note:** The sections below from "Active Mode Support" through the v0.1.0 completion metrics document the original v0.1.0 foundation sprint. See **[v0.2.0 / v0.3.0 Summary](#-v020--v030-summary)** at the end for the later feature work.
 
 ---
 
@@ -271,6 +272,35 @@ This document summarizes the major improvements and feature completions made in 
 
 ---
 
+## 🚀 v0.2.0 / v0.3.0 Summary
+
+After the v0.1.0 foundation, the Production line gained its full security, performance, and multi-tenancy feature set.
+
+### v0.2.0 - Security & Performance (Complete)
+- ✅ **SSL/TLS (FTPS)** via OpenSSL `SSLContext`, `AUTH`/`PBSZ`/`PROT`, certificate auth
+- ✅ **PAM authentication**, **chroot**, **privilege dropping**, **IP access control**
+- ✅ **Rate limiting** and **bandwidth throttling** (uploads and downloads)
+- ✅ **Audit logging** and **vulnerability scanner**
+- ✅ **IPv6 dual-stack** support
+- ✅ **Connection pooling** (`FTPConnectionManager`: acquire/release, pool maintenance)
+- ✅ **Memory-mapped / sendfile transfers** (`TransferConfig` use_sendfile/use_mmap/buffer_size, wired into `handleRETR`)
+- ⚠️ **Compression** class implemented (~90%) but not yet wired into transfers
+
+### v0.3.0 - Virtual Hosting & Advanced User Management (Complete)
+- ✅ **Virtual hosting**: `HOST` command, `FTPVirtualHost` / `FTPVirtualHostManager`, per-host root, SSL, quotas, custom error pages, runtime management
+- ✅ **Persistent user storage**: JSON file via `security.user_file`, auto load/save
+- ✅ **Groups**: membership, lookup, persisted in users JSON
+- ✅ **Quotas**: per-user and per-host `storage_quota_bytes`, STOR enforcement via `getDirectorySize()`
+- ✅ **Session limits**: `SessionTracker` per-user and per-host concurrent sessions
+- ✅ **Guest accounts**: `is_guest`, `expires_at`, `isExpired()` with login rejection
+
+### Remaining Production polish
+- On-the-wire compression integration (MODE Z)
+- Test coverage expansion (~40% → 60%+)
+- Environment/packaging verification (systemd/launchd/Windows/Docker/packages)
+
+---
+
 ## 📚 Related Documents
 
 - [FEATURE_AUDIT.md](FEATURE_AUDIT.md) - Detailed feature status
@@ -280,7 +310,7 @@ This document summarizes the major improvements and feature completions made in 
 
 ---
 
-*Last Updated: February 2025*  
-*Next Review: After test coverage expansion*  
+*Last Updated: May 2026*  
+*Next Review: Before Enterprise v0.1.0 kickoff*  
 *Focus: Production Version (Apache 2.0)*
 

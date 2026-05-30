@@ -10,7 +10,7 @@ The Simple Secure FTP Daemon is organized into three product versions:
 - **🏢 Enterprise Version (BSL 1.1)** - All Production features + Web UI, REST API, SNMP, HA, clustering
 - **🏛️ Datacenter Version (BSL 1.1)** - All Enterprise features + Horizontal scaling, multi-site sync, cloud integrations
 
-**Note:** Most documentation in this directory focuses on the **Production Version** which is currently in active development.
+**Note:** Most documentation in this directory focuses on the **Production Version**, which is feature-complete through v0.3.0 (v0.1.0 released).
 
 ## 📋 Document Organization
 
@@ -28,6 +28,12 @@ The Simple Secure FTP Daemon is organized into three product versions:
 
 ### Technical Debt
 - **[TECHNICAL_DEBT.md](TECHNICAL_DEBT.md)** - Technical debt, known issues, and areas requiring improvement (Production Version)
+
+### Release & Readiness
+- **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** - Steps for preparing a production release
+- **[PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md)** - Actionable checklist to reach production readiness
+- **[VERIFICATION.md](VERIFICATION.md)** - How to verify service, build, Docker, and packaging in real/VM environments
+- **[SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md)** - Security checklist for deployment and review
 
 ## 📚 User Documentation
 

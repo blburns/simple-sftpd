@@ -1,19 +1,19 @@
 # Simple Secure FTP Daemon - Progress Report
 
-**Date:** February 2025  
-**Current Version:** Production v0.1.0 (In Development)  
-**Overall Project Completion:** Production Version (Apache 2.0) - 87% Complete  
-**Product Versions:** Production (Apache 2.0 - In Development), Enterprise (BSL 1.1 - Planned), Datacenter (BSL 1.1 - Planned)
+**Date:** May 2026  
+**Current Version:** Production v0.3.0 (v0.1.0 released)  
+**Overall Project Completion:** Production Version (Apache 2.0) - Feature-complete through v0.3.0  
+**Product Versions:** Production (Apache 2.0 - Feature-complete through v0.3.0), Enterprise (BSL 1.1 - Planned), Datacenter (BSL 1.1 - Planned)
 
 ---
 
 ## 🎯 Executive Summary
 
-We have a **working FTP server** with core functionality implemented. The server can accept connections, authenticate users, handle FTP commands, and **transfer files** using passive mode data connections. The foundation is solid and most critical features for Production v0.1.0 are complete.
+We have a **working FTP server** with the full Production feature set implemented. The server accepts connections, authenticates users (local/PAM), handles the core FTP command set, and **transfers files** through both passive and active mode data connections over plain FTP or FTPS. The v0.1.0 foundation has been released, and the v0.2.0 (security/performance) and v0.3.0 (virtual hosting, advanced user management) feature work is complete.
 
 ### Product Version Status
 
-- **🏭 Production Version (Apache 2.0):** ✅ 87% Complete - In Development
+- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (v0.1.0 released)
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
 
@@ -49,17 +49,22 @@ We have a **working FTP server** with core functionality implemented. The server
 - File transfer resume and append
 - File rename operations
 
+- **Virtual hosting** - Multi-domain routing (HOST), per-host config/SSL/quotas (v0.3.0)
+- **Persistent user storage** - JSON file-based storage with auto load/save (v0.3.0)
+- **Advanced user management** - Groups, quotas, session limits, guest accounts (v0.3.0)
+- **Connection pooling & memory-mapped/sendfile transfers** (v0.2.0)
+
 ### What's Pending/Incomplete (Production Version) ⚠️
 
-- **Persistent user storage** - Users stored in-memory only (moved to Production v0.2.0)
-- **Virtual hosting** - Moved to Production v0.3.0
+- **On-the-wire compression** - `Compression` class exists (~90%) but not yet wired into RETR/STOR
 - **Test coverage expansion** - Currently ~40%, target 60%+
+- **Environment/packaging verification** - systemd/launchd/Windows/Docker/package smoke tests (see [VERIFICATION.md](VERIFICATION.md))
 
 ---
 
 ## 📊 Detailed Status by Component (Production Version)
 
-### Core FTP Server (Production v0.1.0) - 87% Complete
+### Core FTP Server (Production v0.1.0) - Complete
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -76,7 +81,7 @@ We have a **working FTP server** with core functionality implemented. The server
 | Logging | ✅ 100% | Full implementation with STANDARD, JSON, and EXTENDED formats, all log levels working |
 | Rate Limiting | ✅ 95% | Time-window based rate limiting working, per-IP tracking, bandwidth throttling |
 | SSL/TLS | ✅ 95% | OpenSSL integration complete, FTPS working, certificate support |
-| User Management | ✅ 85% | Basic user creation, authentication, home directory assignment works, CLI commands implemented, PAM support |
+| User Management | ✅ 95% | User CRUD, authentication, home dirs, CLI, PAM support, persistent JSON storage, groups, quotas, session limits, guest accounts |
 | Threading | ✅ 90% | Multi-threaded connection handling works, proper mutex usage, but could use connection pooling |
 | CLI Commands | ✅ 95% | All management commands implemented (start, stop, restart, status, reload, test, user, virtual, ssl) |
 
@@ -153,16 +158,12 @@ We have a **working FTP server** with core functionality implemented. The server
 ## 📈 Realistic Timeline
 
 ### Production Version 0.1.0 - Foundation Release
-**Current Status:** ✅ 87% Complete  
-**Estimated Completion:** Q1 2025 (1-2 months)
+**Current Status:** ✅ Released (2025-11-27)
 
-**Remaining Work:**
-- Expand test coverage (1-2 weeks)
-- Performance testing (1 week)
-- Documentation finalization (1 week)
-- Bug fixes and polish (1-2 weeks)
-
-**Realistic Target:** February 2025
+**Remaining polish (non-blocking, tracked for the Production line):**
+- Expand test coverage toward 60%+
+- Performance/load testing
+- Environment and packaging verification
 
 ### Production Version 0.2.0 - Security & Performance
 **Target:** Q2 2025 (April-June 2025)  
@@ -177,7 +178,13 @@ We have a **working FTP server** with core functionality implemented. The server
 
 ### Production Version 0.3.0 - Virtual Hosting
 **Target:** Q2 2025  
-**Status:** ⏳ Planned
+**Status:** ✅ Complete
+
+**Key Features Completed:**
+- ✅ Multi-domain support (HOST command, virtual host routing)
+- ✅ Per-host configuration, SSL certificates, and quotas
+- ✅ Persistent (JSON) user storage
+- ✅ Groups, session limits, and guest accounts
 
 ### Enterprise Version 0.1.0 - Management Interface
 **Target:** Q3 2025  
@@ -258,15 +265,15 @@ We have a **working FTP server** with core functionality implemented. The server
 - ✅ **Security features implemented**
 
 **Weaknesses:**
-- ⚠️ Test coverage could be higher
-- ⚠️ Performance not tested
-- ⚠️ Some advanced features pending (virtual hosting)
-- ⚠️ User persistence not implemented
+- ⚠️ Test coverage could be higher (~40%)
+- ⚠️ Performance/load not yet benchmarked
+- ⚠️ On-the-wire compression not yet wired into transfers
+- ⚠️ Environment/packaging not yet verified on all platforms
 
-**Overall:** We have a **working FTP server** with core functionality complete. The Production Version is **nearly ready for v0.1.0 release** with just testing and polish remaining. The foundation is excellent and the codebase is well-structured.
+**Overall:** We have a **working FTP server** with the full Production feature set complete (v0.1.0 released; v0.2.0 and v0.3.0 feature work done). The codebase is well-structured and the remaining work is polish: broader test coverage, compression integration, and cross-platform/packaging verification.
 
 ---
 
-*Last Updated: February 2025*  
-*Next Review: February 2025*  
-*Focus: Production Version (Apache 2.0) - 87% Complete*
+*Last Updated: May 2026*  
+*Next Review: Before Enterprise v0.1.0 kickoff*  
+*Focus: Production Version (Apache 2.0) - Feature-complete through v0.3.0*

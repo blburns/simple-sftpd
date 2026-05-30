@@ -59,13 +59,16 @@ Optional for first production use; required for the roadmap’s Version 1.0.0 ba
 
 ---
 
-## Optional v0.2.0 enhancements (not blocking production)
+## v0.2.0 / v0.3.0 enhancements
 
 | # | Task | Owner | Done |
 |---|------|-------|------|
-| 22 | Connection pooling (replace or augment thread-per-connection) | | [ ] |
-| 23 | Memory-mapped I/O for large file transfers | | [ ] |
+| 22 | Connection pooling (replace or augment thread-per-connection) | | [x] |
+| 23 | Memory-mapped I/O / sendfile for large file transfers | | [x] |
 | 24 | Integrate compression into RETR/STOR (class exists, not wired) | | [ ] |
+| 25 | Virtual hosting (HOST routing, per-host config/SSL/quotas) | | [x] |
+| 26 | Persistent user storage (JSON file, auto load/save) | | [x] |
+| 27 | Advanced user management (groups, quotas, sessions, guest accounts) | | [x] |
 
 ---
 
@@ -76,4 +79,4 @@ Optional for first production use; required for the roadmap’s Version 1.0.0 ba
 
 ---
 
-*Last updated: February 2025*
+*Last updated: May 2026*

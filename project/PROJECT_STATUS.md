@@ -15,9 +15,9 @@ Simple Secure FTP Daemon is a high-performance, feature-rich FTP server written 
 The project is organized into three product versions:
 
 ### 🏭 Production Version (Apache 2.0)
-- **Status:** ✅ In Development - 87% Complete
+- **Status:** ✅ Feature-complete through v0.3.0 (v0.1.0 released)
 - **Target:** Small to medium deployments, single-server installations
-- **Features:** Complete FTP protocol, FTPS, basic security, multi-format configuration, CLI management
+- **Features:** Complete FTP protocol, FTPS, security hardening, virtual hosting, advanced user management, persistent user storage, multi-format configuration, CLI management
 - **Documentation:** `docs/production/`
 
 ### 🏢 Enterprise Version (BSL 1.1)
@@ -66,16 +66,18 @@ The project is organized into three product versions:
 - ✅ **Error Handling**: Comprehensive error responses and recovery
 
 ### 3. User Management
-- ✅ **User Authentication**: Username/password authentication
+- ✅ **User Authentication**: Username/password authentication (PAM optional on Linux)
 - ✅ **User Manager**: FTPUserManager with add/remove/list operations
 - ✅ **CLI Commands**: Complete user management CLI (add, remove, list)
-- ⚠️ **Persistent Storage**: In-memory only (moved to v0.2.0)
+- ✅ **Persistent Storage**: JSON file-based user storage (`security.user_file`), auto load/save (v0.3.0)
+- ✅ **Groups, Quotas, Guest Accounts**: Group membership, per-user storage quotas, expiring guest accounts (v0.3.0)
+- ✅ **Session Limits**: Per-user and per-host concurrent session limits via SessionTracker (v0.3.0)
 
 ### 4. Command-Line Interface
 - ✅ **Server Management**: start, stop, restart, status, reload, test
 - ✅ **User Management**: user add, remove, list
-- ✅ **Virtual Host Management**: virtual list (stub for v0.3.0)
-- ✅ **SSL Management**: ssl status, generate (stub for v0.2.0)
+- ✅ **Virtual Host Management**: multi-domain routing via HOST command (v0.3.0)
+- ✅ **SSL Management**: ssl status reports real build-time/runtime state (v0.2.0)
 - ✅ **PID File Management**: Process tracking and graceful shutdown
 - ✅ **Signal Handling**: SIGINT, SIGTERM, SIGHUP support
 
@@ -109,14 +111,18 @@ The project is organized into three product versions:
 
 ## 🚧 Current Status (Production Version)
 
-The Production Version has reached **87% completion** for v0.1.0 with:
-- ✅ Working FTP server with file transfers
+The Production Version is **feature-complete through v0.3.0** (v0.1.0 released) with:
+- ✅ Working FTP server with file transfers (passive + active mode)
+- ✅ FTPS/SSL, PAM, chroot, privilege dropping, IP access control, rate limiting
+- ✅ Virtual hosting, quotas, session limits, groups, guest accounts, persistent users
+- ✅ Connection pooling and memory-mapped/sendfile transfers
 - ✅ Complete CLI management interface
 - ✅ Comprehensive test suite
-- ✅ Security features (path validation, permissions)
 - ✅ Excellent documentation
 - ✅ Build and packaging system
 - ✅ Cross-platform support
+
+**Remaining for Production line:** on-the-wire compression integration (class exists, not yet wired into RETR/STOR), broader test coverage (~40% → 60%+ target), and environment/packaging verification (see [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md)).
 
 ## 📊 Project Metrics
 
@@ -140,18 +146,24 @@ The Production Version has reached **87% completion** for v0.1.0 with:
 
 ## 🔄 Next Steps
 
-### Immediate Priorities (v0.1.0 release)
-1. **Documentation** – Production guides complete (deployment, operations, performance, security, troubleshooting). See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
-2. **Expand Test Coverage** (optional): Increase toward 60%+ for future releases.
-3. **Performance Testing** (optional): Load/stress testing for future releases.
+### Immediate Priorities (Production polish)
+1. **Compression integration**: Wire the existing `Compression` class into RETR/STOR (MODE Z / on-the-fly).
+2. **Expand Test Coverage**: Increase toward 60%+ (SSL/TLS, PAM, active mode, virtual hosting, sessions).
+3. **Environment Verification**: Run systemd/launchd/Windows service, Docker, and packaging checks per [VERIFICATION.md](VERIFICATION.md).
 
-### Version 0.2.0 (future)
-1. **Persistent User Storage**: Database/file-based user management
-2. **Performance Optimization**: Connection pooling, memory-mapped I/O
+### Completed in v0.2.0
+1. ✅ **Performance Optimization**: Connection pooling, memory-mapped/sendfile I/O
+2. ✅ **Security**: SSL/TLS, PAM, chroot, privilege dropping, IP access control, bandwidth throttling
 
-### Version 0.3.0 (Q3 2025)
-1. **Virtual Hosting**: Multi-domain support
-2. **Advanced Features**: File versioning, web interface
+### Completed in v0.3.0
+1. ✅ **Persistent User Storage**: JSON file-based user management
+2. ✅ **Virtual Hosting**: Multi-domain support with per-host config, SSL, and quotas
+3. ✅ **Advanced User Management**: Groups, quotas, session limits, guest accounts
+
+### Next Product Line (Enterprise – Planned)
+1. Web administration UI and REST API
+2. High availability and clustering
+3. LDAP/Active Directory and 2FA
 
 ## 📈 Project Health
 
@@ -168,8 +180,8 @@ The Production Version has reached **87% completion** for v0.1.0 with:
 
 **Areas for Development** (future):
 - ⚠️ Test coverage expansion (toward 60%+)
-- ⚠️ User persistence (v0.2.0)
-- ⚠️ Performance optimization (connection pooling, etc.)
+- ⚠️ On-the-wire compression integration (class exists, not yet wired)
+- ⚠️ Environment/packaging verification on Linux/Windows/Docker
 
 ## 🎯 Success Criteria
 
@@ -196,5 +208,5 @@ The Simple FTP Daemon project is **ready for production release** (v0.1.0) with:
 
 ---
 
-*Last Updated: March 2025*  
-*Project Status: Production Version – Ready for Release (v0.1.0)*
+*Last Updated: May 2026*  
+*Project Status: Production Version – Feature-complete through v0.3.0 (v0.1.0 released)*

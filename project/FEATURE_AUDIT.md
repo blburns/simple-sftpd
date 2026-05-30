@@ -1,5 +1,5 @@
 # Simple-SFTPD Feature Audit Report
-**Date:** February 2025  
+**Date:** May 2026  
 **Purpose:** Comprehensive audit of implemented vs. stubbed features  
 **Product Version:** Production Version (Apache 2.0)
 
@@ -7,10 +7,10 @@
 
 This audit examines the actual implementation status of features in simple-sftpd **Production Version**, distinguishing between fully implemented code, partially implemented features, and placeholder/stub implementations.
 
-**Overall Assessment:** The Production Version has a solid foundation with core FTP functionality fully working. Most features are fully implemented and integrated. Enterprise and Datacenter versions are planned but not yet implemented.
+**Overall Assessment:** The Production Version is feature-complete through v0.3.0. Core FTP, security hardening, virtual hosting, advanced user management, and persistent user storage are all implemented and integrated. The main remaining gaps are on-the-wire compression integration and broader test coverage. Enterprise and Datacenter versions are planned but not yet implemented.
 
 **Product Versions:**
-- **🏭 Production Version (Apache 2.0):** ✅ 87% Complete - In Development (this audit)
+- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (this audit)
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
 
@@ -170,21 +170,17 @@ This audit examines the actual implementation status of features in simple-sftpd
 
 ## 3. Virtual Hosting
 
-**Status:** ❌ **NOT IMPLEMENTED** (20% complete - structure only)
+**Status:** ✅ **FULLY IMPLEMENTED** (v0.3.0)
 
 **What Exists:**
-- ✅ `FTPVirtualHost` class (minimal - just hostname and root)
-- ✅ `FTPVirtualHostManager` class (add/remove/list operations)
-- ✅ CLI stub commands
+- ✅ `FTPVirtualHost` class with hostname, root, per-host SSL (cert/key/ca), quotas, session limits, and custom error pages
+- ✅ `FTPVirtualHostManager` class (add/remove/get/list, runtime host management)
+- ✅ `handleHOST()` selects the virtual host; path validation constrained to host root
+- ✅ Per-host user manager and per-host configuration
+- ✅ `AUTH TLS` uses the host certificate when set
+- ✅ `setCustomError(code, message)` substituted in `sendResponse()`
 
-**What's Missing:**
-- ❌ Virtual host routing in FTPServer
-- ❌ Per-host configuration
-- ❌ Per-host SSL certificates
-- ❌ Per-host user management
-- ❌ Integration into connection handling
-
-**Verdict:** Structure exists but no actual functionality. 20% complete.
+**Verdict:** Virtual hosting is fully functional, including routing, per-host config/SSL/quotas, and runtime management.
 
 ---
 
@@ -233,16 +229,22 @@ This audit examines the actual implementation status of features in simple-sftpd
 ## 5. User Management
 
 ### User Storage
-**Status:** ⚠️ **IN-MEMORY ONLY** (70% complete)
+**Status:** ✅ **FULLY IMPLEMENTED** (v0.3.0)
 - ✅ `FTPUserManager` fully implemented
 - ✅ User CRUD operations
 - ✅ CLI commands working
-- ❌ No persistent storage (database/file)
-- ❌ Users lost on restart
+- ✅ Persistent JSON file storage via `security.user_file`
+- ✅ Auto-load on startup, auto-save on add/remove; users survive restart
+
+### Advanced User Management (v0.3.0)
+- ✅ Groups: `addGroup()`, `hasGroup()`, `getGroups()`, `getUsersInGroup()`; persisted in users JSON
+- ✅ Quotas: per-user `storage_quota_bytes`; STOR rejected when exceeded (uses `getDirectorySize()`)
+- ✅ Session limits: `SessionTracker` enforces per-user and per-host concurrent sessions
+- ✅ Guest accounts: `is_guest`, `expires_at`, `isExpired()`; expired logins rejected
 
 ### User Authentication
 - ✅ Basic auth working
-- ⚠️ PAM auth code exists but not integrated (see above)
+- ✅ PAM auth integrated into `handlePASS()` (Linux), with fallback to local users
 
 ---
 
@@ -272,14 +274,15 @@ This audit examines the actual implementation status of features in simple-sftpd
 **Status:** ⚠️ **PARTIAL** (40% complete)
 
 **Test Files Found:**
-- `test_ftp_connection.cpp`
-- `test_ftp_connection_manager.cpp`
-- `test_ftp_rate_limiter.cpp`
-- `test_ftp_server.cpp`
-- `test_ftp_server_config.cpp`
-- `test_ftp_user.cpp`
-- `test_ftp_user_manager.cpp`
-- `test_logger.cpp`
+- `tests/unit/test_compression.cpp`
+- `tests/unit/test_ftp_connection_manager.cpp`
+- `tests/unit/test_ftp_rate_limiter.cpp`
+- `tests/unit/test_ftp_server_config.cpp`
+- `tests/unit/test_ftp_user.cpp`
+- `tests/unit/test_ftp_user_manager.cpp`
+- `tests/unit/test_logger.cpp`
+- `tests/integration/test_ftp_connection.cpp`
+- `tests/integration/test_ftp_server.cpp`
 
 **Coverage:**
 - ✅ Unit tests for core components
@@ -326,20 +329,22 @@ This audit examines the actual implementation status of features in simple-sftpd
    - ~~Downloads not throttled~~
    - ✅ **Fixed:** Download bandwidth throttling added to `handleRETR()`
 
-5. **Virtual Hosting Not Implemented**
-   - Only structure exists
-   - **Fix:** Implement routing and per-host config
+~~5. **Virtual Hosting Not Implemented**~~ ✅ **FIXED** (v0.3.0)
+   - ✅ Routing, per-host config/SSL/quotas, and runtime management implemented
 
-6. **User Persistence Missing**
-   - Users lost on restart
-   - **Fix:** Add database/file storage
+~~6. **User Persistence Missing**~~ ✅ **FIXED** (v0.3.0)
+   - ✅ JSON file-based storage with auto load/save
+
+7. **On-the-wire Compression Not Wired**
+   - `Compression` class exists (~90%) but not integrated into RETR/STOR
+   - **Fix:** Add MODE Z / on-the-fly compression to the transfer path
 
 ### 🟢 LOW PRIORITY
 
-7. **Test Coverage Gaps**
+8. **Test Coverage Gaps**
    - SSL/TLS tests needed
    - PAM tests needed
-   - Active mode tests needed
+   - Active mode and virtual hosting tests needed
 
 ---
 
@@ -352,10 +357,9 @@ This audit examines the actual implementation status of features in simple-sftpd
 - **Active Mode:** 100% ✅ (fully implemented)
 - **File Operations:** 100% ✅
 - **Security:** 90% ✅ (chroot, priv drop, IP control all working)
-- **Virtual Hosting:** 20% ❌ (moved to Production v0.3.0)
 - **Testing:** 40% ⚠️
 
-**Overall Production v0.1.0:** ~87% complete (improved from 85%)
+**Overall Production v0.1.0:** Released (2025-11-27)
 
 ### Production Version 0.2.0 Features
 - **SSL/TLS:** ✅ Complete
@@ -366,10 +370,10 @@ This audit examines the actual implementation status of features in simple-sftpd
 
 **Overall Production v0.2.0:** 100% Complete
 
-### Production Version 0.3.0 Features (Planned)
-- **Virtual Hosting:** Needs ~20-30 hours
-- **User Persistence:** Needs ~8-10 hours
-- **Advanced User Management:** Needs ~15-20 hours
+### Production Version 0.3.0 Features
+- **Virtual Hosting:** ✅ Complete
+- **User Persistence:** ✅ Complete
+- **Advanced User Management:** ✅ Complete (groups, quotas, sessions, guest accounts)
 
 ### Enterprise Version Features (Planned)
 - **Web Management Interface:** Not started
@@ -396,32 +400,32 @@ This audit examines the actual implementation status of features in simple-sftpd
 5. ✅ Add download bandwidth throttling (DONE)
 6. 🔄 Production testing of new features
 
-### Short Term (v0.1.0 polish)
+### Short Term (Production polish)
 1. Expand test coverage
-2. Performance testing
-3. Documentation accuracy review
-4. Bug fixes from testing
+2. Performance/load testing
+3. Wire compression into RETR/STOR
+4. Environment/packaging verification
 
-### Medium Term (v0.2.0)
-1. User persistence
-2. Virtual hosting implementation
-3. Advanced features completion
+### Completed (v0.2.0 / v0.3.0)
+1. ✅ User persistence (JSON file-based)
+2. ✅ Virtual hosting implementation
+3. ✅ Advanced user management (groups, quotas, sessions, guest accounts)
 
 ---
 
 ## Conclusion
 
-The project has **excellent core functionality** with a working FTP server. The main gaps are:
+The project has a **complete Production feature set** with a working FTP server. The remaining gaps are:
 
-1. **Integration issues** - Features exist but aren't wired together (PAM, active mode)
-2. **Documentation mismatch** - Some features marked complete but aren't integrated
-3. **Testing gaps** - Need more comprehensive test coverage
+1. **Compression integration** - The `Compression` class is not yet wired into RETR/STOR
+2. **Test coverage** - Need more comprehensive coverage (SSL/TLS, PAM, active mode, virtual hosting)
+3. **Environment verification** - Service/Docker/packaging smoke tests on real platforms
 
-**Bottom Line:** With focused integration work (PAM, active mode), the project can reach a solid v0.1.0 release. The foundation is strong, but needs polish and integration work.
+**Bottom Line:** The Production line is feature-complete through v0.3.0. Remaining work is polish: compression integration, broader testing, and cross-platform/packaging verification before moving on to the Enterprise version.
 
 ---
 
-*Audit completed: February 2025*  
-*Next review: After Production v0.1.0 release*  
+*Audit completed: May 2026*  
+*Next review: Before Enterprise v0.1.0 kickoff*  
 *Focus: Production Version (Apache 2.0)*
 
