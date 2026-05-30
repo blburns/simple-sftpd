@@ -59,7 +59,7 @@ static struct pam_conv conv = {
 #endif
 
 PAMAuth::PAMAuth(std::shared_ptr<Logger> logger)
-    : logger_(logger), pam_available_(false), pam_handle_(nullptr) {
+    : logger_(logger), pam_available_(false) {
 #ifdef HAVE_PAM
     pam_available_ = true;
     logger_->info("PAM authentication available");
@@ -68,14 +68,7 @@ PAMAuth::PAMAuth(std::shared_ptr<Logger> logger)
 #endif
 }
 
-PAMAuth::~PAMAuth() {
-#ifdef HAVE_PAM
-    if (pam_handle_) {
-        pam_end(static_cast<pam_handle_t*>(pam_handle_), 0);
-        pam_handle_ = nullptr;
-    }
-#endif
-}
+PAMAuth::~PAMAuth() = default;
 
 bool PAMAuth::authenticate(const std::string& username, const std::string& password) {
 #ifdef HAVE_PAM
@@ -94,13 +87,10 @@ bool PAMAuth::authenticate(const std::string& username, const std::string& passw
         return false;
     }
 
-    pam_handle_ = handle;
-
     ret = pam_authenticate(handle, 0);
     if (ret != PAM_SUCCESS) {
         logger_->warn("PAM authentication failed for user: " + username);
         pam_end(handle, ret);
-        pam_handle_ = nullptr;
         return false;
     }
 
@@ -108,13 +98,11 @@ bool PAMAuth::authenticate(const std::string& username, const std::string& passw
     if (ret != PAM_SUCCESS) {
         logger_->warn("PAM account management failed for user: " + username);
         pam_end(handle, ret);
-        pam_handle_ = nullptr;
         return false;
     }
 
     logger_->info("PAM authentication successful for user: " + username);
     pam_end(handle, PAM_SUCCESS);
-    pam_handle_ = nullptr;
     return true;
 #else
     (void)username;

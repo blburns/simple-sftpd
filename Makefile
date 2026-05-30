@@ -385,11 +385,26 @@ ifeq ($(PLATFORM),macos)
 	@echo "Installing dependencies on macOS..."
 	sudo port install openssl jsoncpp cmake
 else ifeq ($(PLATFORM),linux)
-	@echo "Installing dependencies on Linux..."
-	sudo apt-get update
-	sudo apt-get install -y build-essential cmake libssl-dev libjsoncpp-dev
-	# For RPM-based systems
-	# sudo yum install -y gcc-c++ cmake openssl-devel jsoncpp-devel
+	@echo "Installing build dependencies on Linux..."
+	@if command -v apt-get >/dev/null 2>&1; then \
+		sudo apt-get update && sudo apt-get install -y \
+			build-essential cmake pkg-config git \
+			libssl-dev libjsoncpp-dev libyaml-cpp-dev \
+			libpam0g-dev libbz2-dev zlib1g-dev; \
+	elif command -v dnf >/dev/null 2>&1; then \
+		sudo dnf install -y \
+			gcc-c++ cmake pkgconfig git \
+			openssl-devel jsoncpp-devel yaml-cpp-devel \
+			pam-devel bzip2-devel zlib-devel; \
+	elif command -v yum >/dev/null 2>&1; then \
+		sudo yum install -y \
+			gcc-c++ cmake pkgconfig git \
+			openssl-devel jsoncpp-devel yaml-cpp-devel \
+			pam-devel bzip2-devel zlib-devel; \
+	else \
+		echo "No supported package manager found (apt-get, dnf, or yum)"; \
+		exit 1; \
+	fi
 else ifeq ($(PLATFORM),windows)
 	@echo "Installing dependencies on Windows..."
 	@echo "Please run: scripts\\build-windows.bat --deps"
