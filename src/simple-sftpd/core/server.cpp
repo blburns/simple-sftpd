@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <cstring>
+#include <algorithm>
 #ifndef _WIN32
 #include <pwd.h>
 #include <grp.h>
