@@ -251,9 +251,20 @@ if(ENABLE_PACKAGING)
     set(CPACK_PACKAGE_CONTACT "info@simpledaemons.com")
     set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/simpledaemons/${PROJECT_NAME}")
     
-    # Package files
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-    set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+    # Package files (productbuild requires .txt/.html resource extensions on macOS)
+    if(APPLE)
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/cpack")
+        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+            "${CMAKE_BINARY_DIR}/cpack/LICENSE.txt" COPYONLY)
+        set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/cpack/LICENSE.txt")
+        set(CPACK_RESOURCE_FILE_README
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/readme.html")
+        set(CPACK_RESOURCE_FILE_WELCOME
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/welcome.html")
+    else()
+        set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+        set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+    endif()
     
     # Platform-specific package settings
     if(WIN32)
@@ -275,17 +286,28 @@ if(ENABLE_PACKAGING)
     elseif(APPLE)
         # macOS DMG and PKG packages
         set(CPACK_GENERATOR "DragNDrop;productbuild")
-        
-        # DMG settings
+
+        # DMG settings (optional branding assets under assets/)
         set(CPACK_DMG_VOLUME_NAME "${PROJECT_NAME}")
         set(CPACK_DMG_FORMAT "UDBZ")
-        set(CPACK_DMG_BACKGROUND_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/assets/dmg_background.png")
-        set(CPACK_DMG_DS_STORE "${CMAKE_CURRENT_SOURCE_DIR}/assets/DS_Store")
-        
+        set(_dmg_background "${CMAKE_CURRENT_SOURCE_DIR}/assets/dmg_background.png")
+        set(_dmg_dsstore "${CMAKE_CURRENT_SOURCE_DIR}/assets/DS_Store")
+        if(EXISTS "${_dmg_background}")
+            set(CPACK_DMG_BACKGROUND_IMAGE "${_dmg_background}")
+        endif()
+        if(EXISTS "${_dmg_dsstore}")
+            set(CPACK_DMG_DS_STORE "${_dmg_dsstore}")
+        endif()
+
         # PKG settings
         set(CPACK_PRODUCTBUILD_IDENTIFIER "com.simpledaemons.${PROJECT_NAME}")
         set(CPACK_PRODUCTBUILD_PACKAGE_NAME "${PROJECT_NAME}")
-        
+
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+            set(PLATFORM_ID "macos-apple")
+        else()
+            set(PLATFORM_ID "macos-intel")
+        endif()
     elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
         # FreeBSD binary tarball (install tree)
         set(CPACK_GENERATOR "TGZ")

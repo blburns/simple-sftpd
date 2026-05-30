@@ -186,27 +186,32 @@ package: build
 ifeq ($(PLATFORM),macos)
 	@echo "Building macOS packages..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G DragNDrop
-	cd $(BUILD_DIR) && cpack -G productbuild
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg $(DIST_DIR)/ 2>/dev/null || true
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg $(DIST_DIR)/ 2>/dev/null || true
-	@echo "macOS packages created: DMG and PKG"
+	@set -e; built=0; \
+	echo "Building PKG package..."; \
+	cd $(BUILD_DIR) && cpack -G productbuild && mv $(PROJECT_NAME)-*.pkg ../$(DIST_DIR)/; \
+	built=1; \
+	if [ -f assets/DS_Store ] && [ -f assets/dmg_background.png ]; then \
+		echo "Building DMG package..."; \
+		cd $(BUILD_DIR) && cpack -G DragNDrop && mv $(PROJECT_NAME)-*.dmg ../$(DIST_DIR)/; \
+	else \
+		echo "Skipping DMG (add assets/DS_Store and assets/dmg_background.png for branded DMG)"; \
+	fi; \
+	if [ "$$built" -eq 0 ]; then exit 1; fi
+	@echo "macOS packages created in $(DIST_DIR)/"
 else ifeq ($(PLATFORM),linux)
 	@echo "Building Linux packages..."
 	@mkdir -p $(DIST_DIR)
 	@set -e; built=0; \
 	if command -v rpmbuild >/dev/null 2>&1; then \
 		echo "Building RPM package..."; \
-		cd $(BUILD_DIR) && cpack -G RPM; \
-		mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm $(DIST_DIR)/ 2>/dev/null || true; \
+		cd $(BUILD_DIR) && cpack -G RPM && mv $(PROJECT_NAME)-*.rpm ../$(DIST_DIR)/; \
 		built=1; \
 	else \
 		echo "Skipping RPM (rpmbuild not found; install rpm-build on RHEL/Fedora)"; \
 	fi; \
 	if command -v dpkg >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then \
 		echo "Building DEB package..."; \
-		cd $(BUILD_DIR) && cpack -G DEB; \
-		mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb $(DIST_DIR)/ 2>/dev/null || true; \
+		cd $(BUILD_DIR) && cpack -G DEB && mv $(PROJECT_NAME)-*.deb ../$(DIST_DIR)/; \
 		built=1; \
 	else \
 		echo "Skipping DEB (dpkg/dpkg-deb not found; install dpkg-dev on Debian/Ubuntu)"; \
@@ -219,9 +224,8 @@ else ifeq ($(PLATFORM),linux)
 else ifeq ($(PLATFORM),freebsd)
 	@echo "Building FreeBSD packages..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G TGZ
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz $(DIST_DIR)/ 2>/dev/null || true
-	@if ! ls $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz >/dev/null 2>&1; then \
+	cd $(BUILD_DIR) && cpack -G TGZ && mv $(PROJECT_NAME)-*.tar.gz ../$(DIST_DIR)/
+	@if ! ls $(DIST_DIR)/$(PROJECT_NAME)-*.tar.gz >/dev/null 2>&1; then \
 		echo "Error: TGZ package not created. Re-run 'cd build && cmake ..' then 'make package'."; \
 		exit 1; \
 	fi
@@ -778,9 +782,8 @@ ifeq ($(PLATFORM),linux)
 	fi
 	@echo "Building DEB package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G DEB
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb $(DIST_DIR)/
-	@echo "DEB package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb"
+	cd $(BUILD_DIR) && cpack -G DEB && mv $(PROJECT_NAME)-*.deb ../$(DIST_DIR)/
+	@echo "DEB package created in $(DIST_DIR)/"
 else
 	@echo "DEB packages are only supported on Linux"
 endif
@@ -793,9 +796,8 @@ ifeq ($(PLATFORM),linux)
 	fi
 	@echo "Building RPM package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G RPM
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm $(DIST_DIR)/
-	@echo "RPM package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm"
+	cd $(BUILD_DIR) && cpack -G RPM && mv $(PROJECT_NAME)-*.rpm ../$(DIST_DIR)/
+	@echo "RPM package created in $(DIST_DIR)/"
 else
 	@echo "RPM packages are only supported on Linux"
 endif
@@ -824,11 +826,14 @@ endif
 
 package-dmg: build
 ifeq ($(PLATFORM),macos)
+	@if [ ! -f assets/DS_Store ] || [ ! -f assets/dmg_background.png ]; then \
+		echo "Error: DMG branding assets missing (assets/DS_Store, assets/dmg_background.png)"; \
+		exit 1; \
+	fi
 	@echo "Building DMG package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G DragNDrop
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg $(DIST_DIR)/
-	@echo "DMG package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg"
+	cd $(BUILD_DIR) && cpack -G DragNDrop && mv $(PROJECT_NAME)-*.dmg ../$(DIST_DIR)/
+	@echo "DMG package created in $(DIST_DIR)/"
 else
 	@echo "DMG packages are only supported on macOS"
 endif
@@ -837,9 +842,8 @@ package-pkg: build
 ifeq ($(PLATFORM),macos)
 	@echo "Building PKG package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G productbuild
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg $(DIST_DIR)/
-	@echo "PKG package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg"
+	cd $(BUILD_DIR) && cpack -G productbuild && mv $(PROJECT_NAME)-*.pkg ../$(DIST_DIR)/
+	@echo "PKG package created in $(DIST_DIR)/"
 else
 	@echo "PKG packages are only supported on macOS"
 endif
@@ -848,9 +852,8 @@ package-tgz: build
 ifeq ($(PLATFORM),freebsd)
 	@echo "Building FreeBSD TGZ package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G TGZ
-	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz $(DIST_DIR)/
-	@echo "TGZ package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.tar.gz"
+	cd $(BUILD_DIR) && cpack -G TGZ && mv $(PROJECT_NAME)-*.tar.gz ../$(DIST_DIR)/
+	@echo "TGZ package created in $(DIST_DIR)/"
 else
 	@echo "TGZ install packages are only supported on FreeBSD (use package-source for source tarballs)"
 endif
