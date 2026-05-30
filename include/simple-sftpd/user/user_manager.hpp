@@ -20,6 +20,7 @@
 #include <string>
 #include <map>
 #include <mutex>
+#include <vector>
 
 namespace simple_sftpd {
 

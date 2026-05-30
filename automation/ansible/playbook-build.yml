@@ -56,6 +56,17 @@
       when: ansible_facts['os_family'] == "Debian"
       ignore_errors: yes
 
+    - name: Repair interrupted dpkg state (Debian/Ubuntu)
+      shell: |
+        export DEBIAN_FRONTEND=noninteractive
+        dpkg --configure -a
+        apt-get -f install -y
+      become: yes
+      when: ansible_facts['os_family'] == "Debian"
+      register: dpkg_repair
+      changed_when: dpkg_repair.stdout | length > 0 or dpkg_repair.stderr | length > 0
+      failed_when: false
+
     - name: Update package cache (RedHat/CentOS)
       yum:
         update_cache: yes
@@ -64,11 +75,23 @@
       ignore_errors: yes
 
     - name: Update Homebrew (macOS)
-      homebrew:
-        update_homebrew: yes
+      shell: |
+        export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+        BREW="brew"
+        if [[ -n "${HOMEBREW_RUN_AS:-}" && "$(whoami)" != "${HOMEBREW_RUN_AS}" ]]; then
+          BREW="sudo -u ${HOMEBREW_RUN_AS} brew"
+        fi
+        if command -v brew >/dev/null 2>&1 || sudo -u "${HOMEBREW_RUN_AS:-$USER}" command -v brew >/dev/null 2>&1; then
+          $BREW update || true
+        else
+          echo "brew not found; skipping update"
+        fi
+      environment:
+        HOMEBREW_RUN_AS: "{{ homebrew_run_as | default('') }}"
       become: false
       when: ansible_facts['os_family'] == "Darwin"
-      ignore_errors: yes
+      changed_when: false
+      failed_when: false
 
     - name: Install build dependencies (Ubuntu/Debian)
       apt:
@@ -111,18 +134,26 @@
       when: ansible_facts['os_family'] == "RedHat"
 
     - name: Install build dependencies (macOS)
-      homebrew:
-        name:
-          - cmake
-          - openssl@3
-          - pkg-config
-          - git
-          - jsoncpp
-          - yaml-cpp
-        state: present
+      shell: |
+        export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+        BREW="brew"
+        if [[ -n "${HOMEBREW_RUN_AS:-}" && "$(whoami)" != "${HOMEBREW_RUN_AS}" ]]; then
+          BREW="sudo -u ${HOMEBREW_RUN_AS} brew"
+        fi
+        if ! command -v brew >/dev/null 2>&1 && [[ -z "${HOMEBREW_RUN_AS:-}" ]]; then
+          echo "brew not found; ensure Xcode CLT or Homebrew is installed"
+          exit 0
+        fi
+        for pkg in cmake openssl@3 pkg-config git jsoncpp yaml-cpp; do
+          $BREW list "$pkg" >/dev/null 2>&1 || $BREW install "$pkg" || true
+        done
+      environment:
+        HOMEBREW_RUN_AS: "{{ homebrew_run_as | default('') }}"
       become: false
       when: ansible_facts['os_family'] == "Darwin"
-      ignore_errors: yes
+      register: macos_brew_deps
+      changed_when: "'Installing' in macos_brew_deps.stdout"
+      failed_when: false
 
     - name: Set up Homebrew PATH for macOS (Apple Silicon)
       lineinfile:
@@ -177,21 +208,31 @@
       when: ansible_facts['os_family'] == "Debian"
       ignore_errors: yes
 
-    - name: Create project directory
+    - name: Create project directory (Linux)
       file:
         path: "{{ project_dir }}"
         state: directory
         owner: "{{ build_user }}"
         group: "{{ build_group }}"
         mode: '0755'
-      become: "{{ ansible_become | default(false) }}"
-      # On macOS, ensure staff group exists
-      when: ansible_facts['os_family'] != "Darwin" or (ansible_facts['os_family'] == "Darwin" and build_group == "staff")
+      become: yes
+      when: ansible_facts['os_family'] != "Darwin"
+
+    - name: Create project directory (macOS)
+      file:
+        path: "{{ project_dir }}"
+        state: directory
+        owner: "{{ build_user }}"
+        group: staff
+        mode: '0755'
+      become: yes
+      when: ansible_facts['os_family'] == "Darwin"
 
     - name: Clean build directory if requested
       file:
         path: "{{ project_dir }}/build"
         state: absent
+      become: yes
       when: clean_build | bool
 
     - name: Clone or update repository
@@ -201,7 +242,33 @@
         version: "{{ git_branch }}"
         force: yes
         update: yes
+      become: yes
       register: git_result
+
+    - name: Fix repository ownership (Linux)
+      file:
+        path: "{{ project_dir }}"
+        owner: "{{ build_user }}"
+        group: "{{ build_group }}"
+        recurse: yes
+      become: yes
+      when: ansible_facts['os_family'] != "Darwin"
+
+    - name: Fix repository ownership (macOS)
+      file:
+        path: "{{ project_dir }}"
+        owner: "{{ build_user }}"
+        group: staff
+        recurse: yes
+      become: yes
+      when: ansible_facts['os_family'] == "Darwin"
+
+    - name: Configure git safe directory
+      command: git config --global --add safe.directory "{{ project_dir }}"
+      become_user: "{{ build_user }}"
+      become: yes
+      changed_when: false
+      ignore_errors: yes
 
     - name: Display git update status
       debug:
@@ -211,6 +278,8 @@
       command: git rev-parse HEAD
       args:
         chdir: "{{ project_dir }}"
+      become_user: "{{ build_user }}"
+      become: yes
       register: git_commit
       changed_when: false
 
@@ -225,7 +294,7 @@
         owner: "{{ build_user }}"
         group: "{{ build_group }}"
         mode: '0755'
-      become: "{{ ansible_become | default(false) }}"
+      become: yes
       when: ansible_facts['os_family'] != "Darwin"
 
     - name: Create build directory (macOS)
@@ -233,9 +302,9 @@
         path: "{{ project_dir }}/build"
         state: directory
         owner: "{{ build_user }}"
-        group: "staff"
+        group: staff
         mode: '0755'
-      become: "{{ ansible_become | default(false) }}"
+      become: yes
       when: ansible_facts['os_family'] == "Darwin"
 
     - name: Configure CMake

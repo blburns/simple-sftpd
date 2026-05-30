@@ -118,6 +118,28 @@ Vagrant configuration is in `automation/vagrant/`:
 - `Vagrantfile` - Main Vagrant configuration
 - `virtuals/` - Multi-VM configurations for different distributions
 
+## macOS build VM: shared Homebrew
+
+Do **not** `chown -R build /usr/local/Homebrew` — that breaks other users' Homebrew.
+
+**Recommended (multi-user):** run once on the macOS build VM as admin:
+
+```bash
+sudo automation/ansible/scripts/setup-macos-homebrew-shared.sh admin build
+```
+
+That creates a `homebrew` group, adds both users, and makes the install group-writable. Everyone in the group keeps using the same `brew`.
+
+Users must log out/in (or `newgrp homebrew`) after being added to the group.
+
+**Alternative:** if `build` has passwordless `sudo` to the Homebrew owner, set in inventory:
+
+```ini
+BUILD_MACOS ... homebrew_run_as=admin
+```
+
+Ansible will run `brew` as `admin` while still connecting as `build`.
+
 ## Ansible
 
 Ansible automation is in `automation/ansible/`:
