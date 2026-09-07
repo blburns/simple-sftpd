@@ -16,12 +16,16 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <sstream>
+#ifndef _WIN32
+#include <termios.h>
+#endif
 #include "simple-sftpd/core/server.hpp"
 #include "simple-sftpd/config/server_config.hpp"
 #include "simple-sftpd/utils/logger.hpp"
 
 #ifndef SIMPLE_SFTPD_VERSION
-#define SIMPLE_SFTPD_VERSION "0.5.0"
+#define SIMPLE_SFTPD_VERSION "0.6.0"
 #endif
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
@@ -39,6 +43,86 @@ std::atomic<bool> g_shutdown_requested(false);
 bool startServer(const std::string& config_file, bool daemon_mode);
 
 namespace {
+
+/// Splits "read,write:/uploads" into individual permission entries.
+std::vector<std::string> splitCommaList(const std::string& text) {
+    std::vector<std::string> items;
+    std::string current;
+    std::istringstream stream(text);
+    while (std::getline(stream, current, ',')) {
+        const auto begin = current.find_first_not_of(" \t");
+        if (begin == std::string::npos) {
+            continue;
+        }
+        const auto end = current.find_last_not_of(" \t");
+        items.push_back(current.substr(begin, end - begin + 1));
+    }
+    return items;
+}
+
+/**
+ * Reads a password from the terminal with echo disabled.
+ * Preferred over --password, which leaks the credential to the process list.
+ */
+bool readPasswordFromTerminal(const std::string& prompt, std::string& out) {
+#ifdef _WIN32
+    std::cout << prompt << std::flush;
+    std::getline(std::cin, out);
+    std::cout << std::endl;
+    return std::cin.good();
+#else
+    if (isatty(STDIN_FILENO) == 0) {
+        // Not a terminal: read one line so the password can be piped in.
+        return static_cast<bool>(std::getline(std::cin, out));
+    }
+
+    struct termios original {};
+    if (tcgetattr(STDIN_FILENO, &original) != 0) {
+        return false;
+    }
+    struct termios muted = original;
+    muted.c_lflag &= ~static_cast<tcflag_t>(ECHO);
+
+    std::cout << prompt << std::flush;
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &muted) != 0) {
+        return false;
+    }
+    const bool ok = static_cast<bool>(std::getline(std::cin, out));
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
+    std::cout << std::endl;
+    return ok;
+#endif
+}
+
+/// Prompts twice and confirms the two entries match.
+bool promptForNewPassword(std::string& out) {
+    std::string first;
+    if (!readPasswordFromTerminal("New password: ", first)) {
+        std::cerr << "Error: could not read password" << std::endl;
+        return false;
+    }
+    if (first.empty()) {
+        std::cerr << "Error: password must not be empty" << std::endl;
+        return false;
+    }
+
+#ifndef _WIN32
+    if (isatty(STDIN_FILENO) != 0) {
+        std::string second;
+        if (!readPasswordFromTerminal("Confirm password: ", second)) {
+            std::cerr << "Error: could not read password confirmation" << std::endl;
+            return false;
+        }
+        if (first != second) {
+            std::cerr << "Error: passwords do not match" << std::endl;
+            return false;
+        }
+    }
+#endif
+
+    out = std::move(first);
+    return true;
+}
 
 std::string defaultVirtualHostsFilePath() {
 #ifdef _WIN32
@@ -247,11 +331,14 @@ void printUsage() {
     std::cout << "  ssl                  Manage SSL certificates" << std::endl;
 
     std::cout << "\nUser Subcommands:" << std::endl;
-    std::cout << "  add                  Add new user" << std::endl;
-    std::cout << "  remove               Remove user" << std::endl;
-    std::cout << "  modify               Modify user" << std::endl;
+    std::cout << "  add                  Add new user (--username, --home, [--password], [--permissions])" << std::endl;
+    std::cout << "  remove               Remove user (--username)" << std::endl;
+    std::cout << "  modify               Modify user (--username, [--home], [--permissions])" << std::endl;
     std::cout << "  list                 List users" << std::endl;
-    std::cout << "  password             Change user password" << std::endl;
+    std::cout << "  password             Change user password (--username, [--password])" << std::endl;
+    std::cout << "\n  Omit --password to be prompted without echo; passing it on the" << std::endl;
+    std::cout << "  command line exposes the credential to the process list." << std::endl;
+    std::cout << "  Permissions are comma separated: \"read,write:/uploads\"." << std::endl;
 
     std::cout << "\nVirtual Host Subcommands:" << std::endl;
     std::cout << "  add                  Add new virtual host" << std::endl;
@@ -269,7 +356,8 @@ void printUsage() {
 
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  simple-sftpd start --config /etc/simple-sftpd/config.json" << std::endl;
-    std::cout << "  simple-sftpd user add --username john --password secret --home /home/john" << std::endl;
+    std::cout << "  simple-sftpd user add --username john --home /home/john" << std::endl;
+    std::cout << "  simple-sftpd user password --username john" << std::endl;
     std::cout << "  simple-sftpd virtual add --hostname ftp.example.com --root /var/ftp/example" << std::endl;
     std::cout << "  simple-sftpd ssl generate --hostname ftp.example.com" << std::endl;
     std::cout << "  simple-sftpd --daemon start" << std::endl;
@@ -606,24 +694,40 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
 
     if (subcommand == "add") {
         std::string username, password, home_dir;
+        std::vector<std::string> permissions;
+        bool password_given = false;
         for (size_t i = 1; i < args.size(); ++i) {
             if (i + 1 < args.size()) {
                 if (args[i] == "--username" || args[i] == "-u") {
                     username = args[++i];
                 } else if (args[i] == "--password" || args[i] == "-p") {
                     password = args[++i];
+                    password_given = true;
                 } else if (args[i] == "--home" || args[i] == "-h") {
                     home_dir = args[++i];
+                } else if (args[i] == "--permissions") {
+                    permissions = splitCommaList(args[++i]);
                 }
             }
         }
         
-        if (username.empty() || password.empty() || home_dir.empty()) {
-            std::cerr << "Error: user add requires --username, --password, and --home" << std::endl;
+        if (username.empty() || home_dir.empty()) {
+            std::cerr << "Error: user add requires --username and --home" << std::endl;
+            return false;
+        }
+
+        if (!password_given && !promptForNewPassword(password)) {
+            return false;
+        }
+        if (password.empty()) {
+            std::cerr << "Error: password must not be empty" << std::endl;
             return false;
         }
         
         auto user = std::make_shared<FTPUser>(username, password, home_dir);
+        if (!permissions.empty()) {
+            user->setPermissions(permissions);
+        }
         if (user_manager->addUser(user)) {
             std::cout << "User '" << username << "' added successfully" << std::endl;
             std::cout << "User saved to: " << user_manager->getUserFile() << std::endl;
@@ -670,11 +774,100 @@ bool handleUserCommand(const std::vector<std::string>& args, const std::string& 
         }
         return true;
         
-    } else if (subcommand == "modify" || subcommand == "password") {
-        std::cout << "User modification not yet fully implemented in v0.1.0" << std::endl;
-        std::cout << "Use 'user remove' and 'user add' to change user properties" << std::endl;
-        return false;
-        
+    } else if (subcommand == "password") {
+        std::string username, password;
+        bool password_given = false;
+        for (size_t i = 1; i < args.size(); ++i) {
+            if (i + 1 < args.size()) {
+                if (args[i] == "--username" || args[i] == "-u") {
+                    username = args[++i];
+                } else if (args[i] == "--password" || args[i] == "-p") {
+                    password = args[++i];
+                    password_given = true;
+                }
+            }
+        }
+
+        if (username.empty()) {
+            std::cerr << "Error: user password requires --username" << std::endl;
+            return false;
+        }
+
+        auto user = user_manager->getUser(username);
+        if (!user) {
+            std::cerr << "Error: User '" << username << "' not found" << std::endl;
+            return false;
+        }
+
+        if (!password_given && !promptForNewPassword(password)) {
+            return false;
+        }
+        if (password.empty()) {
+            std::cerr << "Error: password must not be empty" << std::endl;
+            return false;
+        }
+
+        user->setPassword(password);
+        if (user->hasLegacyPassword()) {
+            std::cerr << "Error: failed to hash the new password; password unchanged on disk"
+                      << std::endl;
+            return false;
+        }
+        if (!user_manager->saveUsers()) {
+            std::cerr << "Error: failed to save user file" << std::endl;
+            return false;
+        }
+        std::cout << "Password updated for user '" << username << "'" << std::endl;
+        return true;
+
+    } else if (subcommand == "modify") {
+        std::string username, home_dir, permissions_text;
+        bool set_home = false;
+        bool set_permissions = false;
+        for (size_t i = 1; i < args.size(); ++i) {
+            if (i + 1 < args.size()) {
+                if (args[i] == "--username" || args[i] == "-u") {
+                    username = args[++i];
+                } else if (args[i] == "--home" || args[i] == "-h") {
+                    home_dir = args[++i];
+                    set_home = true;
+                } else if (args[i] == "--permissions") {
+                    permissions_text = args[++i];
+                    set_permissions = true;
+                }
+            }
+        }
+
+        if (username.empty()) {
+            std::cerr << "Error: user modify requires --username" << std::endl;
+            return false;
+        }
+        if (!set_home && !set_permissions) {
+            std::cerr << "Error: user modify requires --home and/or --permissions" << std::endl;
+            std::cerr << "       (use 'user password' to change a password)" << std::endl;
+            return false;
+        }
+
+        auto user = user_manager->getUser(username);
+        if (!user) {
+            std::cerr << "Error: User '" << username << "' not found" << std::endl;
+            return false;
+        }
+
+        if (set_home) {
+            user->setHomeDirectory(home_dir);
+        }
+        if (set_permissions) {
+            user->setPermissions(splitCommaList(permissions_text));
+        }
+
+        if (!user_manager->saveUsers()) {
+            std::cerr << "Error: failed to save user file" << std::endl;
+            return false;
+        }
+        std::cout << "User '" << username << "' updated" << std::endl;
+        return true;
+
     } else {
         std::cerr << "Error: Unknown user subcommand: " << subcommand << std::endl;
         return false;

@@ -30,15 +30,40 @@ public:
     ~FTPUser() = default;
 
     const std::string& getUsername() const { return username_; }
-    const std::string& getPassword() const { return password_; }
     const std::string& getHomeDirectory() const { return home_directory_; }
-    
+
+    /**
+     * The stored credential: normally a salted PBKDF2 hash, or a legacy
+     * plaintext value read from an un-migrated user file. Intended for
+     * serialization only -- use authenticate() to check a password.
+     */
+    const std::string& getPasswordHash() const { return password_; }
+
+    /// True when the stored credential is still legacy plaintext.
+    bool hasLegacyPassword() const;
+
     void setUsername(const std::string& username) { username_ = username; }
-    void setPassword(const std::string& password) { password_ = password; }
     void setHomeDirectory(const std::string& home_dir) { home_directory_ = home_dir; }
 
+    /**
+     * Accepts either a plaintext password or an already-hashed credential.
+     * Plaintext is hashed before storage, so loading an existing user file
+     * migrates it in place.
+     */
+    void setPassword(const std::string& password);
+
     bool authenticate(const std::string& password) const;
+
+    /**
+     * Permission entries are either a bare operation ("read", "write", "list",
+     * "all") or an operation scoped to a subtree ("write:/uploads"). Scopes are
+     * virtual paths rooted at the user's home directory. An empty permission
+     * list means unrestricted.
+     */
     bool hasPermission(const std::string& operation, const std::string& path) const;
+    const std::vector<std::string>& getPermissions() const { return permissions_; }
+    void setPermissions(const std::vector<std::string>& permissions) { permissions_ = permissions; }
+    void addPermission(const std::string& permission);
 
     // Groups (v0.3.0)
     const std::vector<std::string>& getGroups() const { return groups_; }

@@ -52,6 +52,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(TEST_SOURCES
     unit/test_ftp_user.cpp
     unit/test_ftp_user_manager.cpp
+    unit/test_password.cpp
     unit/test_ftp_server_config.cpp
     unit/test_logger.cpp
     unit/test_ftp_rate_limiter.cpp
@@ -85,10 +86,11 @@ else()
     )
 endif()
 
-# Link OpenSSL if SSL is enabled
+# libcrypto is always needed for password hashing; ENABLE_SSL only adds TLS.
+find_package(OpenSSL REQUIRED)
+target_link_libraries(simple-sftpd-tests PRIVATE OpenSSL::Crypto)
 if(ENABLE_SSL)
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(simple-sftpd-tests PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(simple-sftpd-tests PRIVATE OpenSSL::SSL)
     target_compile_definitions(simple-sftpd-tests PRIVATE SIMPLE_SFTPD_SSL_ENABLED)
 endif()
 
@@ -121,6 +123,7 @@ endif()
 target_sources(simple-sftpd-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/user/user.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/user/user_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/security/password.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/security/rate_limiter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/core/connection_manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/simple-sftpd/core/connection.cpp

@@ -16,6 +16,7 @@
 
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
+#include "simple-sftpd/security/password.hpp"
 #include "simple-sftpd/utils/logger.hpp"
 #include <fstream>
 #include <filesystem>
@@ -144,6 +145,8 @@ bool FTPUserManager::loadUsers(const std::string& filename) {
     }
     file.close();
 
+    bool migrated = false;
+    {
     std::lock_guard<std::mutex> lock(users_mutex_);
     users_.clear();
 
@@ -156,7 +159,20 @@ bool FTPUserManager::loadUsers(const std::string& filename) {
                 std::string password = user_json["password"].asString();
                 std::string home_dir = user_json["home_directory"].asString();
 
+                // The constructor hashes plaintext, so a legacy file is
+                // migrated as it loads; `migrated` triggers the rewrite below.
+                const bool was_plaintext = !password::isHashed(password);
                 auto user = std::make_shared<FTPUser>(username, password, home_dir);
+                if (was_plaintext && !user->hasLegacyPassword()) {
+                    migrated = true;
+                }
+                if (user_json.isMember("permissions") && user_json["permissions"].isArray()) {
+                    std::vector<std::string> permissions;
+                    for (const auto& p : user_json["permissions"]) {
+                        permissions.push_back(p.asString());
+                    }
+                    user->setPermissions(permissions);
+                }
                 if (user_json.isMember("groups") && user_json["groups"].isArray()) {
                     std::vector<std::string> groups;
                     for (const auto& g : user_json["groups"]) {
@@ -177,11 +193,20 @@ bool FTPUserManager::loadUsers(const std::string& filename) {
             }
         }
         logger_->info("Loaded " + std::to_string(users_.size()) + " users from " + file_to_load);
-        return true;
     } else {
         logger_->warn("User file does not contain valid users array");
         return false;
     }
+    } // users_mutex_
+
+    if (migrated) {
+        logger_->warn("User file contained plaintext passwords; rewriting " +
+                      file_to_load + " with salted hashes");
+        if (!saveUsers(file_to_load)) {
+            logger_->error("Failed to rewrite user file with hashed passwords: " + file_to_load);
+        }
+    }
+    return true;
 #else
     logger_->warn("JSON support not enabled. Cannot load users from file.");
     return false;
@@ -211,13 +236,19 @@ bool FTPUserManager::saveUsers(const std::string& filename) const {
             const auto& user = pair.second;
             Json::Value user_json;
             user_json["username"] = user->getUsername();
-            user_json["password"] = user->getPassword(); // Note: In production, this should be hashed
+            // Salted PBKDF2 hash; see simple-sftpd/security/password.hpp.
+            user_json["password"] = user->getPasswordHash();
             user_json["home_directory"] = user->getHomeDirectory();
             Json::Value groups_arr(Json::arrayValue);
             for (const auto& g : user->getGroups()) {
                 groups_arr.append(g);
             }
             user_json["groups"] = groups_arr;
+            Json::Value permissions_arr(Json::arrayValue);
+            for (const auto& p : user->getPermissions()) {
+                permissions_arr.append(p);
+            }
+            user_json["permissions"] = permissions_arr;
             user_json["is_guest"] = user->isGuest();
             user_json["expires_at"] = static_cast<Json::Int64>(user->getExpiresAt());
             user_json["storage_quota_bytes"] = static_cast<Json::UInt64>(user->getStorageQuotaBytes());

@@ -1699,9 +1699,11 @@ bool FTPConnection::hasPermission(const std::string& operation, const std::strin
     if (!current_user_) {
         return false;
     }
-    
-    // Basic permission check - delegate to FTPUser
-    return current_user_->hasPermission(operation, path);
+
+    // Resolve first so path-scoped grants are matched against a real path
+    // rather than whatever spelling the client happened to send.
+    const std::string resolved = path.empty() ? current_directory_ : resolvePath(path);
+    return current_user_->hasPermission(operation, resolved);
 }
 
 int FTPConnection::createPassiveDataSocket() {

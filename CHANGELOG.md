@@ -5,6 +5,36 @@ All notable changes to simple-sftpd will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-07
+
+### Security
+- **Passwords are no longer stored or compared in plaintext.** The local user
+  store now holds salted PBKDF2-HMAC-SHA256 hashes (210,000 iterations, 16-byte
+  random salt) in a self-describing `$pbkdf2-sha256$<iterations>$<salt>$<digest>`
+  field, so the cost factor can be raised later without invalidating entries.
+- Password comparison is constant time, for both hashed and legacy values.
+- Existing user files are migrated automatically: plaintext entries are hashed
+  on load and the file is rewritten, so no manual conversion step is needed.
+- `user add` and `user password` prompt for the password without echo when
+  `--password` is omitted, keeping the credential out of the process list.
+  A piped password is accepted when stdin is not a terminal.
+
+### Added
+- **Path-scoped permissions** — permission entries may now be scoped to a
+  subtree (`write:/uploads`) in addition to bare operations (`read`, `all`).
+  `FTPUser::hasPermission` previously ignored its `path` argument entirely.
+  Permissions round-trip through the user file.
+- `user password` and `user modify`, which previously printed
+  "not yet fully implemented in v0.1.0" and returned failure. There was no way
+  to rotate a password without deleting and recreating the account.
+- `user add --permissions` and `user modify --permissions`.
+
+### Changed
+- OpenSSL's libcrypto is now always required; `ENABLE_SSL` gates only the
+  FTPS/TLS feature set. Password hashing must not depend on a build option.
+- `FTPUser::getPassword()` is now `getPasswordHash()`, reflecting that the
+  stored value is a hash and is intended for serialization only.
+
 ## [0.5.0] - 2026-09-07
 
 ### Added

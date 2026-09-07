@@ -7,7 +7,7 @@ if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
 endif()
 project(simple-sftpd
-    VERSION 0.5.0
+    VERSION 0.6.0
     DESCRIPTION "Simple Secure FTP Daemon - a secure, configurable FTP server"
     LANGUAGES CXX)
 
@@ -84,19 +84,22 @@ endif()
 # Find required packages
 find_package(Threads REQUIRED)
 
+# OpenSSL is always required: libcrypto backs password hashing regardless of
+# whether TLS is enabled. ENABLE_SSL only gates the FTPS/TLS feature set.
+if(APPLE)
+    foreach(_openssl_hint IN ITEMS
+            "/opt/homebrew/opt/openssl@3"
+            "/opt/homebrew/opt/openssl"
+            "/usr/local/opt/openssl@3"
+            "/usr/local/opt/openssl")
+        if(EXISTS "${_openssl_hint}")
+            list(PREPEND CMAKE_PREFIX_PATH "${_openssl_hint}")
+        endif()
+    endforeach()
+endif()
+find_package(OpenSSL REQUIRED)
+
 if(ENABLE_SSL)
-    if(APPLE)
-        foreach(_openssl_hint IN ITEMS
-                "/opt/homebrew/opt/openssl@3"
-                "/opt/homebrew/opt/openssl"
-                "/usr/local/opt/openssl@3"
-                "/usr/local/opt/openssl")
-            if(EXISTS "${_openssl_hint}")
-                list(PREPEND CMAKE_PREFIX_PATH "${_openssl_hint}")
-            endif()
-        endforeach()
-    endif()
-    find_package(OpenSSL REQUIRED)
     add_definitions(-DSIMPLE_SFTPD_SSL_ENABLED)
 endif()
 
@@ -166,8 +169,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 # Link libraries
 target_link_libraries(${PROJECT_NAME} Threads::Threads)
 
+target_link_libraries(${PROJECT_NAME} OpenSSL::Crypto)
 if(ENABLE_SSL)
-    target_link_libraries(${PROJECT_NAME} OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(${PROJECT_NAME} OpenSSL::SSL)
 endif()
 
 if(ENABLE_COMPRESSION)

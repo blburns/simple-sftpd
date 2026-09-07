@@ -18,7 +18,11 @@
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"
 #include "simple-sftpd/utils/logger.hpp"
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <string>
+#include <unistd.h>
 
 using namespace simple_sftpd;
 
@@ -106,4 +110,50 @@ TEST_F(FTPUserManagerTest, UserCount) {
     usernames = manager_->listUsers();
     EXPECT_EQ(usernames.size(), 1U);
 }
+
+#if defined(ENABLE_JSON)
+TEST_F(FTPUserManagerTest, LegacyPlaintextFileIsMigratedOnLoad) {
+    const auto dir = std::filesystem::temp_directory_path() /
+                     ("sftpd-usertest-" + std::to_string(::getpid()));
+    std::filesystem::create_directories(dir);
+    const auto user_file = dir / "users.json";
+
+    {
+        std::ofstream out(user_file);
+        out << R"({"users":[{"username":"legacy","password":"plaintext-secret",)"
+               R"("home_directory":"/tmp","permissions":["read","write:/uploads"]}],)"
+               R"("version":"1.0"})";
+    }
+
+    auto manager = std::make_shared<FTPUserManager>(logger_, user_file.string());
+    auto user = manager->getUser("legacy");
+    ASSERT_NE(user, nullptr);
+
+    // The password still works, but is no longer stored in the clear.
+    EXPECT_TRUE(user->authenticate("plaintext-secret"));
+    EXPECT_FALSE(user->authenticate("wrong"));
+    EXPECT_FALSE(user->hasLegacyPassword());
+
+    // Permissions survive the round trip.
+    ASSERT_EQ(user->getPermissions().size(), 2u);
+    EXPECT_TRUE(user->hasPermission("write", "/tmp/uploads/x"));
+    EXPECT_FALSE(user->hasPermission("write", "/tmp/elsewhere/x"));
+
+    // And the file on disk was rewritten, so the plaintext is gone.
+    std::ifstream in(user_file);
+    const std::string contents((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+    EXPECT_EQ(contents.find("plaintext-secret"), std::string::npos);
+    EXPECT_NE(contents.find("$pbkdf2-sha256$"), std::string::npos);
+
+    // Reloading the migrated file must not double-hash.
+    auto reloaded = std::make_shared<FTPUserManager>(logger_, user_file.string());
+    auto reloaded_user = reloaded->getUser("legacy");
+    ASSERT_NE(reloaded_user, nullptr);
+    EXPECT_TRUE(reloaded_user->authenticate("plaintext-secret"));
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+#endif
 
