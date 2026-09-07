@@ -1,8 +1,8 @@
 # Production Version Documentation
 
-**Version:** 0.3.0  
+**Version:** 0.4.0  
 **License:** Apache 2.0  
-**Status:** Feature-complete (Production line v0.1.0–v0.3.0)
+**Status:** Feature-complete (Production line v0.1.0–v0.4.0)
 
 ---
 
@@ -18,14 +18,15 @@ The Production Version of Simple Secure FTP Daemon (simple-sftpd) is an FTP/FTPS
 - **Virtual hosting:** HOST command, per-host root and user manager, per-host SSL, quotas, session limits, custom error messages
 - **User management:** persistent JSON storage (`security.user_file`), groups, guest accounts with expiry, per-user storage quota
 - Transfer optimization: sendfile and memory-mapped I/O (Linux/macOS), connection pooling
+- On-the-wire **MODE Z** (streaming zlib) when `transfer.enable_compression` is set
 - Multi-format configuration (INI, JSON, YAML) with SIGHUP reload
 - Cross-platform: Linux, macOS, FreeBSD, Windows
+- `simple-sftpd virtual` CLI (add/list/modify/enable/disable/remove)
 
-## Not Yet Complete
+## Out of Production scope
 
-- On-the-wire compression in the transfer path (class exists, not integrated)
-- `simple-sftpd virtual` CLI for add/list/modify/enable/disable/remove (JSON persistence)
-- Broader test coverage and full packaging/service verification on all platforms
+- Enterprise / Datacenter (web UI, REST, HA, LDAP)
+- Full packaging/service verification on Linux and Windows (see [VERIFICATION.md](../../project/VERIFICATION.md))
 
 ## Documentation
 
@@ -50,5 +51,5 @@ See [Deployment](deployment.md) and [Operations](operations.md) for details.
 
 ---
 
-**Last Updated:** May 2026  
-**Version:** 0.3.0
+**Last Updated:** August 2026  
+**Version:** 0.4.0

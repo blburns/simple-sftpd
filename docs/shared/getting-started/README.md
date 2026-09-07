@@ -1,6 +1,6 @@
 # Installation Guide
 
-**Production version:** v0.3.0
+**Production version:** v0.4.0
 
 This guide covers installing simple-sftpd on supported platforms: Linux, macOS, FreeBSD, and Windows.
 

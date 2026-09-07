@@ -1,5 +1,5 @@
 # Simple-SFTPD Feature Audit Report
-**Date:** May 2026  
+**Date:** August 2026  
 **Purpose:** Comprehensive audit of implemented vs. stubbed features  
 **Product Version:** Production Version (Apache 2.0)
 
@@ -7,10 +7,10 @@
 
 This audit examines the actual implementation status of features in simple-sftpd **Production Version**, distinguishing between fully implemented code, partially implemented features, and placeholder/stub implementations.
 
-**Overall Assessment:** The Production Version is feature-complete through v0.3.0. Core FTP, security hardening, virtual hosting, advanced user management, and persistent user storage are all implemented and integrated. The main remaining gaps are on-the-wire compression integration and broader test coverage. Enterprise and Datacenter versions are planned but not yet implemented.
+**Overall Assessment:** The Production Version is complete through **v0.4.0**. Core FTP, security hardening, virtual hosting, MODE Z, PORT/EPRT dispatch, and protocol integration tests are in place. Remaining work is Enterprise/Datacenter plus optional coverage and Linux/Windows/Docker env verification.
 
 **Product Versions:**
-- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (this audit)
+- **🏭 Production Version (Apache 2.0):** ✅ Complete through v0.4.0 (this audit)
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
 
@@ -22,21 +22,24 @@ This audit examines the actual implementation status of features in simple-sftpd
 
 #### FTP Commands (RFC 959)
 - **USER** - ✅ Fully implemented
-- **PASS** - ✅ Fully implemented (basic auth only, PAM not integrated)
+- **PASS** - ✅ Fully implemented (local + PAM on Linux)
 - **QUIT** - ✅ Fully implemented
 - **PWD/XPWD** - ✅ Fully implemented
 - **CWD/XCWD** - ✅ Fully implemented
 - **LIST/NLST** - ✅ Fully implemented
-- **RETR** - ✅ Fully implemented with resume support
-- **STOR** - ✅ Fully implemented with resume support
+- **RETR** - ✅ Fully implemented with resume support (MODE Z in v0.4.0)
+- **STOR** - ✅ Fully implemented with resume support (MODE Z in v0.4.0)
 - **DELE** - ✅ Fully implemented
 - **MKD/XMKD** - ✅ Fully implemented
 - **RMD/XRMD** - ✅ Fully implemented
 - **SIZE** - ✅ Fully implemented
 - **TYPE** - ✅ Fully implemented (A/I modes)
+- **MODE** - ✅ S default; Z when compression enabled
+- **PORT** / **EPRT** - ✅ Dispatched (v0.4.0)
 - **NOOP** - ✅ Fully implemented
 - **SYST** - ✅ Fully implemented
-- **FEAT** - ✅ Fully implemented
+- **FEAT** - ✅ Fully implemented (includes MODE Z when enabled)
+- **HOST** - ✅ Fully implemented (v0.3.0)
 
 #### File Operations
 - **File Transfer (RETR/STOR)** - ✅ Fully working
@@ -54,13 +57,11 @@ This audit examines the actual implementation status of features in simple-sftpd
 - **Passive Mode (PASV)** - ✅ Fully implemented
   - Code: `handlePASV()`, `createPassiveDataSocket()`, `acceptDataConnection()`
   - Status: Fully working with proper socket handling
-- **Active Mode (PORT)** - ✅ FULLY IMPLEMENTED
-  - Code: `handlePORT()` fully implemented
-  - `connectActiveDataSocket()` - Connects to client-specified address/port
-  - `acceptDataConnection()` - Handles both passive and active modes
-  - Active mode state tracking and cleanup
-  - Status: Fully working for data transfers
-  - **Completion:** 100% - Active mode fully functional
+- **Active Mode (PORT / EPRT)** - ✅ FULLY IMPLEMENTED (v0.4.0 dispatch fix)
+  - Code: `handlePORT()`, `handleEPRT()`, `connectActiveDataSocket()`
+  - Wired into the command switch (previously PORT returned `502`)
+  - Integration test: PORT RETR over a live local server
+  - **Completion:** 100% - Active mode functional and tested
 
 ---
 
@@ -195,13 +196,12 @@ This audit examines the actual implementation status of features in simple-sftpd
 - **Note:** May not be actively used in all operations
 
 ### Compression
-**Status:** ✅ **FULLY IMPLEMENTED** (90% complete)
-- `Compression` class fully implemented
-- GZIP compression/decompression working
-- BZIP2 compression/decompression working
-- Conditional compilation (ENABLE_COMPRESSION flag)
-- **Note:** Not yet integrated into file transfer operations
-- **Completion:** 90% - Code complete, needs integration
+**Status:** ✅ **FULLY IMPLEMENTED** (v0.4.0)
+- `Compression` class: gzip/bzip2 whole-buffer helpers
+- `ZlibStream`: RFC 1950 streaming zlib on RETR/STOR when `MODE Z`
+- FEAT advertises `MODE Z` when `transfer.enable_compression`
+- REST/APPE rejected while MODE Z is active
+- Integration test for compressed transfer
 
 ### Performance Monitoring
 **Status:** ✅ **FULLY IMPLEMENTED** (95% complete)
@@ -271,7 +271,7 @@ This audit examines the actual implementation status of features in simple-sftpd
 
 ## 8. Testing
 
-**Status:** ⚠️ **PARTIAL** (40% complete)
+**Status:** ✅ Protocol paths covered (v0.4.0); measured line coverage still approximate
 
 **Test Files Found:**
 - `tests/unit/test_compression.cpp`
@@ -283,13 +283,13 @@ This audit examines the actual implementation status of features in simple-sftpd
 - `tests/unit/test_logger.cpp`
 - `tests/integration/test_ftp_connection.cpp`
 - `tests/integration/test_ftp_server.cpp`
+- `tests/integration/test_ftp_protocol.cpp` (PASV, PORT, HOST, MODE Z, AUTH TLS)
 
 **Coverage:**
 - ✅ Unit tests for core components
-- ⚠️ Integration tests exist but coverage unknown
-- ❌ SSL/TLS tests (need verification)
-- ❌ PAM tests (need verification)
-- ❌ Active mode tests (likely missing)
+- ✅ Live protocol integration tests
+- ✅ AUTH TLS smoke (when OpenSSL is present)
+- ✅ PAM test skip-gated on macOS
 - ❌ Performance tests
 
 ---
@@ -335,16 +335,14 @@ This audit examines the actual implementation status of features in simple-sftpd
 ~~6. **User Persistence Missing**~~ ✅ **FIXED** (v0.3.0)
    - ✅ JSON file-based storage with auto load/save
 
-7. **On-the-wire Compression Not Wired**
-   - `Compression` class exists (~90%) but not integrated into RETR/STOR
-   - **Fix:** Add MODE Z / on-the-fly compression to the transfer path
+~~7. **On-the-wire Compression Not Wired**~~ ✅ **FIXED** (v0.4.0)
+   - MODE Z streaming zlib on RETR/STOR; FEAT; REST/APPE rejected with MODE Z
 
 ### 🟢 LOW PRIORITY
 
 8. **Test Coverage Gaps**
-   - SSL/TLS tests needed
-   - PAM tests needed
-   - Active mode and virtual hosting tests needed
+   - Protocol smoke added (PASV, PORT, HOST, MODE Z, AUTH TLS)
+   - Measured line-coverage / load suite still optional 1.0 work
 
 ---
 
@@ -375,6 +373,11 @@ This audit examines the actual implementation status of features in simple-sftpd
 - **User Persistence:** ✅ Complete
 - **Advanced User Management:** ✅ Complete (groups, quotas, sessions, guest accounts)
 
+### Production Version 0.4.0 Features
+- **MODE Z:** ✅ Complete
+- **PORT/EPRT dispatch:** ✅ Complete
+- **Protocol integration tests:** ✅ Complete
+
 ### Enterprise Version Features (Planned)
 - **Web Management Interface:** Not started
 - **REST API:** Not started
@@ -400,32 +403,30 @@ This audit examines the actual implementation status of features in simple-sftpd
 5. ✅ Add download bandwidth throttling (DONE)
 6. 🔄 Production testing of new features
 
-### Short Term (Production polish)
-1. Expand test coverage
-2. Performance/load testing
-3. Wire compression into RETR/STOR
-4. Environment/packaging verification
+### Short Term (post-Production)
+1. Optional coverage/load bars
+2. Linux/Docker/Windows verification on those hosts
 
-### Completed (v0.2.0 / v0.3.0)
+### Completed (v0.2.0 / v0.3.0 / v0.4.0)
 1. ✅ User persistence (JSON file-based)
 2. ✅ Virtual hosting implementation
 3. ✅ Advanced user management (groups, quotas, sessions, guest accounts)
+4. ✅ MODE Z and PORT/EPRT dispatch
 
 ---
 
 ## Conclusion
 
-The project has a **complete Production feature set** with a working FTP server. The remaining gaps are:
+The Production line is **complete through v0.4.0**. Remaining gaps are Enterprise/Datacenter and optional quality/env work:
 
-1. **Compression integration** - The `Compression` class is not yet wired into RETR/STOR
-2. **Test coverage** - Need more comprehensive coverage (SSL/TLS, PAM, active mode, virtual hosting)
-3. **Environment verification** - Service/Docker/packaging smoke tests on real platforms
+1. Measured coverage / load (not blocking Production polish)
+2. systemd / Docker / Windows smoke on those hosts
 
-**Bottom Line:** The Production line is feature-complete through v0.3.0. Remaining work is polish: compression integration, broader testing, and cross-platform/packaging verification before moving on to the Enterprise version.
+**Bottom Line:** Tag v0.4.0 when ready. Enterprise/Datacenter remain planned.
 
 ---
 
-*Audit completed: May 2026*  
+*Audit completed: August 2026*  
 *Next review: Before Enterprise v0.1.0 kickoff*  
 *Focus: Production Version (Apache 2.0)*
 

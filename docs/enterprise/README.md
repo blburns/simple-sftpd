@@ -8,7 +8,7 @@
 
 ## Overview
 
-The Enterprise Version extends **Production v0.3.0** with features for large deployments.
+The Enterprise Version extends **Production v0.4.0** with features for large deployments.
 
 ## Features (Planned)
 
@@ -20,5 +20,5 @@ The Enterprise Version extends **Production v0.3.0** with features for large dep
 
 ---
 
-**Last Updated:** May 2026  
-**Production baseline:** v0.3.0
+**Last Updated:** August 2026  
+**Production baseline:** v0.4.0

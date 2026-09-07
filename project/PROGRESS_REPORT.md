@@ -1,279 +1,101 @@
 # Simple Secure FTP Daemon - Progress Report
 
-**Date:** May 2026  
-**Current Version:** Production v0.3.0 (v0.1.0 released)  
-**Overall Project Completion:** Production Version (Apache 2.0) - Feature-complete through v0.3.0  
-**Product Versions:** Production (Apache 2.0 - Feature-complete through v0.3.0), Enterprise (BSL 1.1 - Planned), Datacenter (BSL 1.1 - Planned)
+**Date:** August 2026  
+**Current Version:** Production v0.4.0  
+**Overall Project Completion:** Production Version (Apache 2.0) — complete through v0.4.0 polish  
+**Product Versions:** Production (Apache 2.0 — finished through v0.4.0), Enterprise (BSL 1.1 — Planned), Datacenter (BSL 1.1 — Planned)
 
 ---
 
-## 🎯 Executive Summary
+## Executive Summary
 
-We have a **working FTP server** with the full Production feature set implemented. The server accepts connections, authenticates users (local/PAM), handles the core FTP command set, and **transfers files** through both passive and active mode data connections over plain FTP or FTPS. The v0.1.0 foundation has been released, and the v0.2.0 (security/performance) and v0.3.0 (virtual hosting, advanced user management) feature work is complete.
+The Production line is **finished through v0.4.0**. The server accepts connections, authenticates users (local/PAM), transfers files in PASV and PORT, supports HOST virtual hosting, FTPS, and **MODE Z** streaming compression when `transfer.enable_compression` is set. Remaining work is Enterprise/Datacenter, optional coverage/load bars, and Linux/Windows/Docker env verification on hosts we do not have here.
 
 ### Product Version Status
 
-- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (v0.1.0 released)
-- **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
-- **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
-
-**Note:** This report focuses on the **Production Version**, feature-complete through v0.3.0.
+- **Production Version (Apache 2.0):** complete through v0.4.0
+- **Enterprise Version (BSL 1.1):** 0% — Planned
+- **Datacenter Version (BSL 1.1):** 0% — Planned
 
 ---
 
-## ✅ What Works (Production Version)
+## What Works (Production Version)
 
-- Socket server (listening, accepting connections)
-- Complete FTP command parsing (USER, PASS, QUIT, PWD, CWD, LIST, RETR, STOR, DELE, MKD, RMD, SIZE, TYPE, NOOP, SYST, FEAT)
-- User authentication (username/password)
-- **File transfers** - RETR (download) and STOR (upload) working through data connections
-- **Passive mode** - Full PASV implementation with data socket creation
-- **Active mode** - Full PORT command support with data connections
-- **LIST command** - Properly uses data connections
-- **Path validation** - Directory traversal protection implemented
-- **Basic permissions** - Permission checking system in place
-- Configuration system (INI, JSON, YAML parsers)
-- Logging system (STANDARD, JSON, EXTENDED formats)
-- Rate limiting (time-window based)
-- Connection management (cleanup, tracking)
-- **CLI commands** - All management commands implemented (start, stop, restart, status, reload, test, user management)
-- **Test suite** - 51 tests passing
-- Build system (CMake, Makefile)
-- Documentation (comprehensive)
-- SSL/TLS support (FTPS with OpenSSL)
-- PAM authentication integration
-- Chroot support
-- Privilege dropping
-- IP-based access control
-- Bandwidth throttling
-- File transfer resume and append
-- File rename operations
+- Socket server (listen, accept, multi-client)
+- FTP command set including USER, PASS, QUIT, PWD, CWD, LIST, RETR, STOR, DELE, MKD, RMD, SIZE, TYPE, NOOP, SYST, FEAT, PORT, EPRT, PASV, MODE, HOST, AUTH/PBSZ/PROT
+- Local and PAM authentication (PAM Linux-only)
+- File transfers through data connections (passive and active)
+- MODE Z streaming zlib on RETR/STOR (REST/APPE rejected while MODE Z is active)
+- Virtual hosting (HOST), persistent JSON users, groups, guests, quotas, session limits
+- INI/JSON/YAML configuration; STANDARD/JSON/EXTENDED logging
+- CLI: start, stop, restart, status, reload, test, user, virtual, ssl
+- Test suite: 59 tests (1 skipped PAM on macOS) including protocol integration
+- FTPS (OpenSSL), chroot, privilege dropping, IP ACL, rate limiting, bandwidth throttle
+- Connection pooling, sendfile/mmap (skipped when MODE Z)
 
-- **Virtual hosting** - Multi-domain routing (HOST), per-host config/SSL/quotas (v0.3.0)
-- **Persistent user storage** - JSON file-based storage with auto load/save (v0.3.0)
-- **Advanced user management** - Groups, quotas, session limits, guest accounts (v0.3.0)
-- **Connection pooling & memory-mapped/sendfile transfers** (v0.2.0)
+### Pending (not Production polish)
 
-### What's Pending/Incomplete (Production Version) ⚠️
-
-- **On-the-wire compression** - `Compression` class exists (~90%) but not yet wired into RETR/STOR
-- **Test coverage expansion** - Currently ~40%, target 60%+
-- **Environment/packaging verification** - systemd/launchd/Windows/Docker/package smoke tests (see [VERIFICATION.md](VERIFICATION.md))
+- Broader coverage / load benchmarks (optional 1.0 bar)
+- systemd / Docker / Windows / Linux package smoke on those hosts (see [VERIFICATION.md](VERIFICATION.md))
+- Enterprise / Datacenter features
 
 ---
 
-## 📊 Detailed Status by Component (Production Version)
+## Phase 1 environment verification (2026-08-30)
 
-### Core FTP Server (Production v0.1.0) - Complete
+| Check | Result |
+|-------|--------|
+| `simple-sftpd test --config` (simple INI/JSON/YAML) | Pass |
+| launchd plist `plutil -lint` | Pass |
+| User LaunchAgent start / 220+QUIT / bootout | Pass |
+| System `/Library/LaunchDaemons` install | Not run |
+| Docker | Not run (Docker not installed) |
+| macOS native CPack `.pkg` | Pass (ldapd-style rebuild) |
+| Linux systemd / DEB / RPM | Not run (no Linux host) |
+| Windows service | Not run (no Windows host) |
+
+---
+
+## Component status
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Socket Server | ✅ 100% | Fully working, accepts connections, handles multiple clients |
-| Command Parser | ✅ 95% | Handles all basic commands (USER, PASS, QUIT, PWD, CWD, LIST, RETR, STOR, DELE, MKD, RMD, SIZE, TYPE, NOOP, SYST, FEAT) |
-| Authentication | ✅ 95% | Basic username/password auth works, PAM integrated, user manager functional, basic permissions implemented |
-| File Operations | ✅ 95% | RETR and STOR working through data connections, resume and append support, proper error handling |
-| Data Connections | ✅ 100% | Passive mode fully implemented, active mode fully implemented |
-| Directory Ops | ✅ 90% | LIST, CWD, MKD, RMD, PWD all working correctly, LIST uses data connections |
-| Path Resolution | ✅ 95% | Path validation implemented, directory traversal protection, home directory enforcement, chroot support |
-| Connection Management | ✅ 90% | Connection manager tracks connections, cleanup loop works, max connection limits enforced |
-| Error Handling | ✅ 85% | Comprehensive error responses, connection error recovery |
-| Configuration | ✅ 95% | INI, JSON, YAML parsers fully functional, automatic format detection |
-| Logging | ✅ 100% | Full implementation with STANDARD, JSON, and EXTENDED formats, all log levels working |
-| Rate Limiting | ✅ 95% | Time-window based rate limiting working, per-IP tracking, bandwidth throttling |
-| SSL/TLS | ✅ 95% | OpenSSL integration complete, FTPS working, certificate support |
-| User Management | ✅ 95% | User CRUD, authentication, home dirs, CLI, PAM support, persistent JSON storage, groups, quotas, session limits, guest accounts |
-| Threading | ✅ 90% | Multi-threaded connection handling works, proper mutex usage, but could use connection pooling |
-| CLI Commands | ✅ 95% | All management commands implemented (start, stop, restart, status, reload, test, user, virtual, ssl) |
+| Socket / data connections | Complete | PASV + PORT/EPRT dispatched and tested |
+| Authentication | Complete | Local + PAM (Linux); guests/expiry |
+| File operations | Complete | RETR/STOR/REST/APPE/RNFR/RNTO; MODE Z on RETR/STOR |
+| Virtual hosting | Complete | HOST + `virtual` CLI |
+| Configuration / logging | Complete | INI/JSON/YAML |
+| SSL/TLS | Complete | AUTH TLS smoke in integration tests |
+| CLI | Complete | Management + user + virtual + ssl |
+| Tests | Green | ~59 tests; protocol integration added in v0.4.0 |
+| Docker / Linux packages | Ready in-tree | Not smoke-tested on this Mac |
 
-### Build & Deployment (Production v0.1.0) - 95% Complete
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| CMake Build | ✅ 100% | Fully working |
-| Makefile | ✅ 100% | Fully working |
-| Docker | ✅ 90% | Dockerfile ready, needs testing |
-| Packaging | ✅ 85% | Files ready, needs testing |
-| Service Files | ✅ 90% | systemd, launchd, Windows ready |
-| Testing | ✅ 85% | Google Test integrated, 51 tests passing |
-
-### Documentation (Production v0.1.0) - 90% Complete
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| API Docs | ✅ 95% | Comprehensive header docs |
-| User Guides | ✅ 90% | Installation, configuration, usage |
-| Examples | ✅ 85% | Good examples, could use more |
-| Configuration | ✅ 95% | Extensive config examples |
-| Development | ✅ 85% | Architecture docs, contribution guide |
-
-### Testing (Production v0.1.0) - 75% Complete
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Unit Tests | ✅ 75% | 51 tests passing, covering core components |
-| Integration Tests | ✅ 60% | Basic integration tests for server and connections |
-| Performance Tests | ❌ 0% | Not started |
-| Test Coverage | ⚠️ 40% | Good coverage of core functionality, needs expansion |
+Approximate unit/integration coverage is still short of a 90% 1.0 bar; v0.4.0 did not block on that.
 
 ---
 
-## 🔍 Critical Gaps for Production v0.1.0
+## Timeline
 
-### Must Have (Blocking Release)
-1. ✅ **Data Connection Implementation** - COMPLETE
-   - ✅ Passive mode data socket setup
-   - ✅ Active mode data socket setup
-   - ✅ Data channel handling
-
-2. ✅ **File Transfer Implementation** - COMPLETE
-   - ✅ RETR (download) through data connection
-   - ✅ STOR (upload) through data connection
-   - ✅ Proper error handling
-
-3. ✅ **LIST Command Fix** - COMPLETE
-   - ✅ Now uses data connection properly
-
-### Should Have (Important)
-4. ✅ **Basic Permissions** - COMPLETE
-   - ✅ Read/write/list permission checks implemented
-   - ✅ Permission-based command restrictions
-
-5. ✅ **Path Validation** - COMPLETE
-   - ✅ Directory traversal protection
-   - ✅ User home directory access validation
-
-6. ✅ **CLI Commands** - COMPLETE
-   - ✅ All management commands implemented
-   - ✅ User management CLI working
-
-### Nice to Have (Can Wait)
-7. ✅ **SSL/TLS** - COMPLETE (Production v0.2.0)
-8. ✅ **Chroot** - COMPLETE (Production v0.2.0)
-9. ✅ **Resume/Append** - COMPLETE (Production v0.2.0)
-10. ✅ **Rename** - COMPLETE (Production v0.2.0)
-11. ✅ **Active Mode** - COMPLETE (Production v0.2.0)
+| Version | Status |
+|---------|--------|
+| Production 0.1.0 | Released 2025-11-27 |
+| Production 0.2.0 | Complete |
+| Production 0.3.0 | Complete (tagged) |
+| Production 0.4.0 | Complete 2026-08-30 (tag when asked) |
+| Enterprise / Datacenter | Planned |
 
 ---
 
-## 📈 Realistic Timeline
+## Honest Assessment
 
-### Production Version 0.1.0 - Foundation Release
-**Current Status:** ✅ Released (2025-11-27)
+**Strengths:** Working FTP/FTPS server, PORT actually dispatched, MODE Z wired, protocol tests green, macOS launchd user-agent and config/package smoke recorded.
 
-**Remaining polish (non-blocking, tracked for the Production line):**
-- Expand test coverage toward 60%+
-- Performance/load testing
-- Environment and packaging verification
+**Remaining:** Linux/Windows/Docker verification, load/pen-test bars, Enterprise/Datacenter.
 
-### Production Version 0.2.0 - Security & Performance
-**Target:** Q2 2025 (April-June 2025)  
-**Status:** ✅ Complete
-
-**Key Features Completed:**
-- ✅ SSL/TLS implementation
-- ✅ Active mode support
-- ✅ Advanced security (PAM, chroot, privilege dropping)
-- ✅ Performance optimizations
-- ✅ Bandwidth throttling
-
-### Production Version 0.3.0 - Virtual Hosting
-**Target:** Q2 2025  
-**Status:** ✅ Complete
-
-**Key Features Completed:**
-- ✅ Multi-domain support (HOST command, virtual host routing)
-- ✅ Per-host configuration, SSL certificates, and quotas
-- ✅ Persistent (JSON) user storage
-- ✅ Groups, session limits, and guest accounts
-
-### Enterprise Version 0.1.0 - Management Interface
-**Target:** Q3 2025  
-**Status:** ⏳ Planned
-
-**Key Features:**
-- Web management interface
-- REST API
-- Real-time monitoring
-
-### Datacenter Version 0.1.0 - Horizontal Scaling
-**Target:** Q4 2025  
-**Status:** ⏳ Planned
-
-**Key Features:**
-- Horizontal scaling
-- Multi-site synchronization
-- Cloud integration
+**Overall:** Production polish is done. Tag **v0.4.0** when you want the release cut.
 
 ---
 
-## 💡 Recommendations
-
-### Immediate Priorities (Production Version)
-1. ✅ **Data connections** - COMPLETE
-2. ✅ **File transfers** - COMPLETE
-3. ✅ **Basic permissions** - COMPLETE
-4. ✅ **CLI commands** - COMPLETE
-5. **Expand test coverage** - In progress
-6. **Performance testing** - Next priority
-
-### Technical Debt (Production Version)
-1. **Refactor command handlers** - Some duplication
-2. **Improve error handling** - More robust
-3. **Add connection pooling** - Performance (Production v0.2.0)
-4. **Memory management** - Review for leaks
-
-### Documentation (Production Version)
-1. ✅ **Update status docs** - COMPLETE
-2. **Add troubleshooting** - Common issues
-3. **Performance tuning** - Best practices
-4. **Security hardening** - Guidelines
-
----
-
-## 🎯 Success Metrics
-
-### Current Metrics (Production Version)
-- **Lines of Code:** ~2,467 (source files)
-- **Test Code:** ~830 lines (51 tests)
-- **Commands Implemented:** 15+ (all core commands working)
-- **Test Coverage:** ~40% (good core coverage)
-- **Documentation:** 90% complete
-- **Build Success Rate:** 100%
-
-### Target Metrics for Production v0.1.0
-- **Test Coverage:** 60%+ (in progress)
-- **Working File Transfers:** ✅ COMPLETE
-- **Data Connections:** ✅ COMPLETE
-- **Basic Permissions:** ✅ COMPLETE
-- **CLI Commands:** ✅ COMPLETE
-- **Documentation:** 95%+ (nearly there)
-
----
-
-## 📝 Honest Assessment
-
-**Strengths:**
-- ✅ Solid architecture and design
-- ✅ Excellent documentation
-- ✅ Working build system
-- ✅ Good logging infrastructure
-- ✅ Clean code structure
-- ✅ **Core FTP functionality working**
-- ✅ **File transfers functional**
-- ✅ **Comprehensive test suite**
-- ✅ **Complete CLI management**
-- ✅ **Security features implemented**
-
-**Weaknesses:**
-- ⚠️ Test coverage could be higher (~40%)
-- ⚠️ Performance/load not yet benchmarked
-- ⚠️ On-the-wire compression not yet wired into transfers
-- ⚠️ Environment/packaging not yet verified on all platforms
-
-**Overall:** We have a **working FTP server** with the full Production feature set complete (v0.1.0 released; v0.2.0 and v0.3.0 feature work done). The codebase is well-structured and the remaining work is polish: broader test coverage, compression integration, and cross-platform/packaging verification.
-
----
-
-*Last Updated: May 2026*  
+*Last Updated: August 2026*  
 *Next Review: Before Enterprise v0.1.0 kickoff*  
-*Focus: Production Version (Apache 2.0) - Feature-complete through v0.3.0*
+*Focus: Production Version (Apache 2.0) — complete through v0.4.0*

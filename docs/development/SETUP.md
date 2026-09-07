@@ -2,7 +2,7 @@
 
 Step-by-step guide to set up your development environment for Simple Secure FTP Daemon.
 
-**Current version:** Production v0.3.0
+**Current version:** Production v0.4.0
 
 ## Prerequisites Checklist
 

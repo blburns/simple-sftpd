@@ -5,6 +5,24 @@ All notable changes to simple-sftpd will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-30
+
+### Added
+- **On-the-wire compression (MODE Z)** — streaming zlib on RETR/STOR when `transfer.enable_compression` is set; advertised in FEAT
+- **EPRT** active-mode command (RFC 2428, IPv4)
+- Live protocol integration tests: PASV RETR/STOR, PORT, HOST, MODE Z, AUTH TLS smoke
+
+### Fixed
+- PORT was implemented but not dispatched (clients got `502`); active mode now works
+- Accepted control sockets are forced blocking so login does not drop on macOS
+- Connection-manager stop no longer waits on a 60s cleanup sleep
+- REST/APPE rejected with a clear reply when MODE Z is active (not mixed with resume/append)
+
+### Changed
+- Production polish complete; Enterprise / Datacenter remain planned
+- Config: `enable_compression` honored under `[transfer]` (and top-level INI)
+- Packaging matches simple-ldapd: CPack FHS layout, `{name}-{version}-{platform}` names, macOS PKG rebuilt without CPack’s leaked `Contents/` payload, DEB/RPM maintainer scripts that do not start the daemon. Docker is not the packaging path.
+
 ## [0.3.0] - 2026-05-30
 
 ### Added
@@ -177,6 +195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.4.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.4.0
 [0.3.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.3.0
 [0.2.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.2.0
 [0.1.0]: https://github.com/simpledaemons/simple-sftpd/releases/tag/v0.1.0

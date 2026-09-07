@@ -1,6 +1,6 @@
 # Production Version Performance Tuning
 
-**Version:** 0.3.0  
+**Version:** 0.4.0  
 **License:** Apache 2.0
 
 ---
@@ -100,5 +100,5 @@ logging:
 
 ---
 
-**Last Updated:** May 2026  
-**Version:** 0.3.0
+**Last Updated:** August 2026  
+**Version:** 0.4.0

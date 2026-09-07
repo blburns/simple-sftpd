@@ -20,4 +20,4 @@ The Datacenter Version extends **Enterprise** (planned) for large-scale and clou
 ---
 
 **Last Updated:** May 2026  
-**Status:** Planned (depends on Production v0.3.0+)
+**Status:** Planned (depends on Production v0.4.0+)

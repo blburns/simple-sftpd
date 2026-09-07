@@ -12,14 +12,14 @@ Prove the server and packaging work in real or VM environments. **Steps:** [VERI
 
 | # | Task | Owner | Done |
 |---|------|-------|------|
-| 1 | Run server under **systemd** (Linux): start, stop, restart, logs, PID file | | [ ] |
-| 2 | Run server under **launchd** (macOS): same checks | | [ ] |
-| 3 | Run server as **Windows service**: same checks | | [ ] |
-| 4 | Test **install scripts**: `tools/install-service.sh`, `etc/windows/install-service.bat` | | [ ] |
-| 5 | **Linux build**: configure, build, run smoke test (login + one transfer) | | [ ] |
-| 6 | **Windows build**: same (or document “unsupported” if deferred) | | [ ] |
-| 7 | **Docker**: build image, run container, test FTP (control + data) and config mount | | [ ] |
-| 8 | **Packaging**: build at least one package (DEB or RPM), install, run, basic transfer test | | [ ] |
+| 1 | Run server under **systemd** (Linux): start, stop, restart, logs, PID file | | [ ] not run — no Linux host; CI-aspirational |
+| 2 | Run server under **launchd** (macOS): same checks | | [x] user LaunchAgent smoke 2026-08-30 (not system LaunchDaemon) |
+| 3 | Run server as **Windows service**: same checks | | [ ] not run — no Windows host |
+| 4 | Test **install scripts**: `tools/install-service.sh`, `etc/windows/install-service.bat` | | [ ] not run — would require system install |
+| 5 | **Linux build**: configure, build, run smoke test (login + one transfer) | | [ ] not run here; CI-aspirational |
+| 6 | **Windows build**: same (or document “unsupported” if deferred) | | [ ] deferred — no Windows host |
+| 7 | **Docker** | | [ ] not used — native CPack packaging (same as simple-ldapd) |
+| 8 | **Packaging**: native CPack (macOS PKG/DMG, Linux DEB/RPM) | | [x] macOS PKG rebuilt 2026-08-30 (Linux DEB/RPM not built here) |
 
 ---
 
@@ -65,7 +65,7 @@ Optional for first production use; required for the roadmap’s Version 1.0.0 ba
 |---|------|-------|------|
 | 22 | Connection pooling (replace or augment thread-per-connection) | | [x] |
 | 23 | Memory-mapped I/O / sendfile for large file transfers | | [x] |
-| 24 | Integrate compression into RETR/STOR (class exists, not wired) | | [ ] |
+| 24 | Integrate compression into RETR/STOR (MODE Z, v0.4.0) | | [x] |
 | 25 | Virtual hosting (HOST routing, per-host config/SSL/quotas) | | [x] |
 | 26 | Persistent user storage (JSON file, auto load/save) | | [x] |
 | 27 | Advanced user management (groups, quotas, sessions, guest accounts) | | [x] |
@@ -79,4 +79,6 @@ Optional for first production use; required for the roadmap’s Version 1.0.0 ba
 
 ---
 
-*Last updated: May 2026*
+See [VERIFICATION.md](VERIFICATION.md) for the 2026-08-30 Phase 1 results table.
+
+*Last updated: August 2026*

@@ -8,7 +8,7 @@ Simple Secure FTP Daemon is available in three versions, each designed for diffe
 
 ### 🏭 Production Version
 **License:** Apache 2.0  
-**Status:** ✅ Feature-complete through v0.3.0 (v0.1.0 released 2025-11-27)  
+**Status:** ✅ Feature-complete through v0.4.0 (v0.1.0 released 2025-11-27)  
 **Target:** Small to medium deployments, single-server installations
 
 - Complete FTP protocol (RFC 959), passive and active mode
@@ -206,7 +206,7 @@ If you find any issues with the documentation or have suggestions for improvemen
 
 ---
 
-**Last Updated:** May 2026  
-**Production Version:** v0.3.0 (feature-complete)  
+**Last Updated:** August 2026  
+**Production Version:** v0.4.0 (feature-complete)  
 **Enterprise Version:** Planned  
 **Datacenter Version:** Planned

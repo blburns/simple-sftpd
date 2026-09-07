@@ -1,12 +1,12 @@
 # Simple Secure FTP Daemon - Technical Debt
 
-**Date:** May 2026  
-**Current Version:** Production v0.3.0 (v0.1.0 released)  
+**Date:** August 2026  
+**Current Version:** Production v0.4.0  
 **Purpose:** Track technical debt, known issues, and areas requiring improvement  
 **Product Version:** Production Version (Apache 2.0)
 
 **Product Versions:**
-- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0
+- **🏭 Production Version (Apache 2.0):** ✅ Complete through v0.4.0
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ Planned - No technical debt yet
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ Planned - No technical debt yet
 
@@ -16,8 +16,8 @@
 
 This document tracks technical debt, known issues, code quality improvements, and areas that need refactoring or enhancement in the simple-sftpd project. Items are prioritized by impact and urgency.
 
-**Open Debt Items:** Test coverage, error handling, compression integration, memory review, logging, performance tuning  
-**Resolved since v0.1.0:** Virtual hosting, user persistence, connection pooling (v0.2.0/v0.3.0)
+**Open Debt Items:** Test coverage toward 1.0 bars, error handling, memory review, logging, performance tuning  
+**Resolved since v0.1.0:** Virtual hosting, user persistence, connection pooling, MODE Z (v0.2.0–v0.4.0)
 
 ---
 
@@ -29,16 +29,14 @@ This document tracks technical debt, known issues, code quality improvements, an
 **Estimated Effort:** 25-35 hours
 
 **Current State:**
-- Unit test coverage: ~40%
-- Integration tests: Partial coverage
-- SSL/TLS tests: Missing
-- PAM tests: Missing
-- Active mode tests: Missing
+- Unit/integration suite green (~59 tests); approximate coverage still below a 90% 1.0 bar
+- Protocol tests added in v0.4.0: PASV RETR/STOR, PORT, HOST, MODE Z, AUTH TLS smoke
+- PAM test gated (skipped on macOS)
+- No performance/load suite yet
 
 **Issues:**
-- Missing tests for SSL/TLS functionality
-- Missing tests for PAM authentication
-- Missing tests for active mode
+- Coverage tooling/percent still weak
+- PAM still skip-gated off Linux
 - No performance benchmarks
 - No load/stress testing
 
@@ -48,14 +46,15 @@ This document tracks technical debt, known issues, code quality improvements, an
 - Unknown behavior under load
 
 **Action Items:**
-- [ ] Expand unit test coverage to 60%+
-- [ ] Add SSL/TLS tests
-- [ ] Add PAM authentication tests
-- [ ] Add active mode tests
+- [x] Add SSL/TLS smoke (AUTH TLS)
+- [x] Add PAM test (skip when unavailable)
+- [x] Add active mode / PORT transfer test
+- [x] Add MODE Z transfer test
+- [ ] Expand measured coverage toward 60%+ if tooling allows
 - [ ] Create performance test suite
 - [ ] Implement load testing framework
 
-**Target:** v0.2.0 release
+**Target:** optional 1.0 quality bar (not blocking v0.4.0)
 
 ---
 
@@ -156,20 +155,14 @@ This document tracks technical debt, known issues, code quality improvements, an
 ---
 
 ### 6b. Compression Integration
-**Status:** ⚠️ **Open**  
-**Priority:** 🟡 **MEDIUM**  
-**Estimated Effort:** 8-12 hours
+**Status:** ✅ **Resolved (v0.4.0)**  
+**Priority:** ~~🟡 MEDIUM~~
 
-**Current State:**
-- `Compression` class implemented (~90%, GZIP/BZIP2)
-- Not yet wired into the file transfer path
-
-**Action Items:**
-- [ ] Wire compression into RETR/STOR (MODE Z / on-the-fly)
-- [ ] Add negotiation and configuration options
-- [ ] Add tests for compressed transfers
-
-**Target:** Production polish
+**Resolution:**
+- ✅ `ZlibStream` (RFC 1950) on RETR/STOR when `MODE Z` and `transfer.enable_compression`
+- ✅ FEAT advertises `MODE Z`; REST/APPE rejected while MODE Z is active
+- ✅ Protocol integration test for compressed transfer
+- Note: whole-buffer gzip/bzip2 helpers remain for other uses; on-the-wire path is zlib MODE Z
 
 ---
 
@@ -268,22 +261,23 @@ This document tracks technical debt, known issues, code quality improvements, an
 ## 📋 Summary
 
 ### Open Items
-- **High Priority:** Test coverage expansion
-- **Medium Priority:** Error handling, compression integration, code refactoring
+- **High Priority:** Measured coverage / load bars (optional 1.0)
+- **Medium Priority:** Error handling, code refactoring
 - **Low Priority:** Memory review, logging improvements, performance tuning
 
-### Resolved Items (v0.2.0 / v0.3.0)
+### Resolved Items (v0.2.0 / v0.3.0 / v0.4.0)
 - ✅ Virtual hosting implementation
 - ✅ User persistence
 - ✅ Connection pooling
+- ✅ MODE Z / on-the-wire compression
 
 ---
 
 ## 🎯 Next Steps
 
-1. **Immediate (Production polish):**
-   - Expand test coverage
-   - Wire compression into RETR/STOR
+1. **Immediate (post-Production):**
+   - Optional coverage/load work
+   - Linux/Docker/Windows env verification on those hosts
    - Refactor command handlers / remove duplication
 
 2. **Short Term:**
@@ -297,7 +291,7 @@ This document tracks technical debt, known issues, code quality improvements, an
 
 ---
 
-*Last Updated: May 2026*  
+*Last Updated: August 2026*  
 *Next Review: Before Enterprise v0.1.0 kickoff*  
 *Focus: Production Version (Apache 2.0)*
 

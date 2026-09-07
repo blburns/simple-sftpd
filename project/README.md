@@ -10,7 +10,7 @@ The Simple Secure FTP Daemon is organized into three product versions:
 - **🏢 Enterprise Version (BSL 1.1)** - All Production features + Web UI, REST API, SNMP, HA, clustering
 - **🏛️ Datacenter Version (BSL 1.1)** - All Enterprise features + Horizontal scaling, multi-site sync, cloud integrations
 
-**Note:** Most documentation in this directory focuses on the **Production Version**, which is feature-complete through v0.3.0 (v0.1.0 released).
+**Note:** Most documentation in this directory focuses on the **Production Version**, which is complete through v0.4.0.
 
 ## 📋 Document Organization
 
@@ -30,7 +30,10 @@ The Simple Secure FTP Daemon is organized into three product versions:
 - **[TECHNICAL_DEBT.md](TECHNICAL_DEBT.md)** - Technical debt, known issues, and areas requiring improvement (Production Version)
 
 ### Release & Readiness
+- **[../PROJECT_OVERVIEW.md](../PROJECT_OVERVIEW.md)** - Short executive overview
 - **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)** - Steps for preparing a production release
+- **[../RELEASING.md](../RELEASING.md)** - Tag and publish how-to
+- **[../VERSIONING.md](../VERSIONING.md)** - SemVer policy
 - **[PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md)** - Actionable checklist to reach production readiness
 - **[VERIFICATION.md](VERIFICATION.md)** - How to verify service, build, Docker, and packaging in real/VM environments
 - **[SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md)** - Security checklist for deployment and review
@@ -42,6 +45,8 @@ For user-facing documentation (installation, configuration, usage guides), see t
 ## 📝 Project History
 
 For version history and changes, see **[CHANGELOG.md](../CHANGELOG.md)** in the project root.
+
+*Doc set standard: SimpleDaemons `STANDARDIZATION_TEMPLATES/docs/PROJECT_DOCS_STANDARD.md`*
 
 ---
 

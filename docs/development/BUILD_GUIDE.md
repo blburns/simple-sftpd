@@ -2,7 +2,7 @@
 
 Complete guide to building Simple Secure FTP Daemon for different product versions and platforms.
 
-**Current release:** Production v0.3.0
+**Current release:** Production v0.4.0
 
 ## Quick Start
 

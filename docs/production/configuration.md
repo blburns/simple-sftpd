@@ -1,6 +1,6 @@
 # Production Version Configuration Guide
 
-**Version:** 0.3.0  
+**Version:** 0.4.0  
 **License:** Apache 2.0
 
 ---
@@ -19,7 +19,7 @@ See [Configuration Reference](../shared/configuration/README.md) for the full op
 | Advanced (SSL, tuning) | `config/advanced/` |
 | Production-hardened | `config/production/` |
 
-## Key Production Options (v0.3.0)
+## Key Production Options (v0.4.0)
 
 ```ini
 [security]
@@ -28,6 +28,9 @@ virtual_hosts_file = /etc/simple-sftpd/virtual_hosts.json  # virtual host defini
 chroot_enabled = true
 drop_privileges = true
 run_as_user = ftp
+
+[transfer]
+enable_compression = false   # MODE Z on RETR/STOR when true
 
 [virtual_hosts]
 enable_virtual_hosts = true
@@ -50,4 +53,4 @@ simple-sftpd test --config /etc/simple-sftpd/simple-sftpd.conf
 
 ---
 
-**Last Updated:** May 2026
+**Last Updated:** August 2026

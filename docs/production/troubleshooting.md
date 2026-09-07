@@ -1,7 +1,7 @@
 # Simple Secure FTP Daemon - Troubleshooting Guide
 
-**Version:** 0.3.0  
-**Last Updated:** May 2026
+**Version:** 0.4.0  
+**Last Updated:** August 2026
 
 ---
 
@@ -145,5 +145,5 @@ Run `simple-sftpd ssl status` to confirm SSL is enabled and config/cert paths ar
 
 ---
 
-**Last Updated:** May 2026  
-**Version:** 0.3.0
+**Last Updated:** August 2026  
+**Version:** 0.4.0

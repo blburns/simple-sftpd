@@ -1,179 +1,52 @@
-# Packaging Templates
+# Packaging
 
-This directory contains templates for creating installers and packages for {PROJECT_NAME} across different platforms.
+CPack in the top-level `CMakeLists.txt` is the supported package path (`make package`). Files here are maintainer scripts, installer sources, and assets that CPack uses. Docker is not part of this packaging path.
 
-## Directory Structure
+## Installed layout (must match production templates)
+
+| Platform | Binary | Config | Data | Logs | FTP root |
+|----------|--------|--------|------|------|----------|
+| Linux (`CMAKE_INSTALL_PREFIX=/usr`) | `/usr/bin/simple-sftpd` | `/etc/simple-sftpd/simple-sftpd.conf` | `/var/lib/simple-sftpd` | `/var/log/simple-sftpd` | `/var/ftp` |
+| macOS | `/usr/local/bin/simple-sftpd` | `/etc/simple-sftpd/simple-sftpd.conf` | `/var/lib/simple-sftpd` | `/var/log/simple-sftpd` | `/var/ftp` |
+| Windows | `%PROGRAMFILES%\simple-sftpd\simple-sftpd.exe` | `%PROGRAMDATA%\simple-sftpd\simple-sftpd.conf` | `%PROGRAMDATA%\simple-sftpd` | `%PROGRAMDATA%\simple-sftpd\logs` | `%PROGRAMDATA%\simple-sftpd\ftp` |
+
+Linux units start `--config` then `--foreground` at those paths so the flag wins over `foreground = false` in the production templates. Packages install templates and examples under `/etc/simple-sftpd/`, documentation under `/usr/share/doc/simple-sftpd/` (Linux) or `/usr/local/share/doc/simple-sftpd/` (macOS), and create the data/log/FTP directories and the `simple-sftpd` service user. DEB/RPM do not enable or start the daemon.
+
+Package names follow `{name}-{version}-{platform}-{arch}` (no product-line infix), matching simple-ldapd.
+
+## Building
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+make package          # platform packages into dist/
+make package-source   # source tar.gz / zip
+make package-all      # binary + source
+```
+
+On macOS, `make package` / `make package-pkg` runs CPack then `packaging/macos/pkg/rebuild-from-cpack.sh` so Installer.app does not see CPack’s leaked `Contents/` payload.
+
+## Directory structure
 
 ```
 packaging/
-├── macos/
-│   ├── pkg/                    # macOS PackageMaker (PKG) installer
-│   │   ├── Distribution.xml     # Package distribution configuration
-│   │   ├── PackageInfo.xml      # Package metadata
-│   │   └── scripts/
-│   │       └── postinstall      # Post-installation script
-│   └── dmg/                     # macOS Disk Image (DMG)
-│       └── create-dmg.sh        # DMG creation script
-├── windows/
-│   ├── nsis/                    # NSIS installer
-│   │   └── installer.nsi        # NSIS installer script
-│   └── msi/                     # Windows Installer (MSI)
-│       └── installer.wxs        # WiX installer script
-├── linux/
-│   ├── deb/                     # Debian/Ubuntu packages
-│   │   ├── control              # Debian control file
-│   │   └── postinst             # Post-installation script with license
-│   └── rpm/                     # Red Hat/CentOS packages
-│       └── {PROJECT_NAME}.spec  # RPM spec file with license
-├── assets/
-│   ├── icons/                   # Installer icons and graphics
-│   │   ├── {PROJECT_NAME}.ico   # Windows icon
-│   │   ├── {PROJECT_NAME}.icns  # macOS icon
-│   │   ├── header.bmp           # NSIS header image
-│   │   ├── wizard.bmp           # NSIS wizard image
-│   │   ├── background.png       # PKG background
-│   │   └── dmg-background.png   # DMG background
-│   ├── welcome.html             # Welcome page for PKG
-│   ├── readme.html              # Read me page
-│   └── conclusion.html          # Installation complete page
-└── licenses/
-    ├── LICENSE.txt              # Plain text license
-    └── LICENSE.rtf               # Rich text license for Windows
+├── macos/pkg/rebuild-from-cpack.sh
+├── macos/pkg/scripts/postinstall
+├── linux/deb/{postinst,prerm,postrm}
+├── linux/rpm/{preinstall,postinstall,preuninstall,postuninstall}.sh
+├── windows/{nsis,msi}/
+├── assets/{welcome,readme,conclusion}.html
+└── LICENSE.txt
 ```
 
-## Features
+## Maintainer scripts
 
-### License Acceptance
-- **macOS PKG**: License displayed and must be accepted
-- **Windows NSIS/MSI**: License page with acceptance required
-- **Linux DEB/RPM**: License displayed during installation with acceptance prompt
-
-### Custom Icons and Graphics
-- Windows: `.ico` files for application and installer
-- macOS: `.icns` files for application, PNG for backgrounds
-- Custom header/wizard images for NSIS installers
-- DMG background images
-
-### Platform-Specific Features
-
-#### macOS PKG
-- Modern installer with welcome/readme/conclusion pages
-- License acceptance
-- Post-installation scripts
-- Service user creation
-- LaunchDaemon integration
-
-#### macOS DMG
-- Custom background image
-- Applications symlink
-- License and README included
-- Compressed format (UDZO)
-
-#### Windows NSIS
-- Modern UI with custom graphics
-- License acceptance page
-- Component selection
-- Start Menu shortcuts
-- Windows Service installation
-- Uninstaller included
-
-#### Windows MSI
-- WiX-based installer
-- License acceptance
-- Service installation
-- Registry entries
-- Upgrade support
-
-#### Linux DEB
-- License acceptance during installation
-- Service user creation
-- Systemd integration
-- Configuration file installation
-
-#### Linux RPM
-- License acceptance in %pre section
-- Service user creation
-- Systemd integration
-- Proper file placement
-
-## Usage
-
-### Building Packages
-
-#### macOS PKG
-```bash
-# Build the project first
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make
-
-# Create package
-cpack -G PackageMaker
-```
-
-#### macOS DMG
-```bash
-# After creating PKG
-cd packaging/macos/dmg
-./create-dmg.sh 1.0.0
-```
-
-#### Windows NSIS
-```bash
-# Build NSIS installer
-makensis packaging/windows/nsis/installer.nsi
-```
-
-#### Windows MSI
-```bash
-# Build with WiX
-candle packaging/windows/msi/installer.wxs
-light installer.wixobj
-```
-
-#### Linux DEB
-```bash
-# Build Debian package
-dpkg-buildpackage -us -uc
-```
-
-#### Linux RPM
-```bash
-# Build RPM package
-rpmbuild -ba packaging/linux/rpm/{PROJECT_NAME}.spec
-```
-
-## Template Variables
-
-Replace these placeholders in templates:
-- `{PROJECT_NAME}` - Project name (e.g., simple-dhcpd)
-- `{PROJECT_USER}` - Service user name (e.g., dhcpdev)
-- `{PROJECT_GROUP}` - Service group name
-- `{PROTOCOL}` - Protocol name (e.g., DHCP, NTP)
-- `${VERSION}` - Version number (set during build)
-
-## Icon Requirements
-
-### Windows
-- **Application Icon**: 256x256, `.ico` format
-- **Header Image**: 150x57, `.bmp` format
-- **Wizard Image**: 164x314, `.bmp` format
-
-### macOS
-- **Application Icon**: 512x512, `.icns` format
-- **Background**: 620x418, `.png` format
-- **DMG Background**: 658x498, `.png` format
-
-## License Files
-
-- **LICENSE.txt**: Plain text license (for all platforms)
-- **LICENSE.rtf**: Rich text format license (for Windows MSI)
+- **Linux DEB/RPM:** non-interactive; create the service user and directories; `daemon-reload`; do not prompt for a license; do not start the service.
+- **macOS PKG:** create the service user, copy `templates/production.conf` if no config exists, `launchctl load` the LaunchDaemon.
+- **REST/APPE + MODE Z** is a protocol policy, not a packaging concern.
 
 ## Notes
 
-- All scripts must be executable (`chmod +x`)
-- License files must be present in `packaging/licenses/`
-- Icon files must be present in `packaging/assets/icons/`
-- Update GUIDs in MSI/WiX templates with unique values
-- Test installers on clean systems before distribution
-
+- Minimum macOS is 12.0 (`CMAKE_OSX_DEPLOYMENT_TARGET`).
+- `hostArchitectures` is `arm64,x86_64` after the PKG rebuild.
+- Google Test is not installed into packages (`INSTALL_GTEST OFF`).

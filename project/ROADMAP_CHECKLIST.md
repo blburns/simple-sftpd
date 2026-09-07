@@ -4,16 +4,16 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 ## 📊 Overall Progress
 
-**Current Version:** 0.3.0 (Production)  
-**Overall Progress:** Production line feature-complete (v0.1.0–v0.3.0)  
-**Status:** ✅ **RELEASED** - v0.1.0 Foundation Release; v0.2.0 and v0.3.0 feature work complete
+**Current Version:** 0.4.0 (Production)  
+**Overall Progress:** Production line feature-complete (v0.1.0–v0.4.0)  
+**Status:** ✅ **RELEASE-READY** - v0.4.0 polish complete (tag when asked)
 
 **Product Versions:**
-- 🏭 **Production** (Apache 2.0): ✅ Feature-complete through v0.3.0
+- 🏭 **Production** (Apache 2.0): ✅ Feature-complete through v0.4.0
 - 🏢 **Enterprise** (BSL 1.1): ⏳ Planned - 0% Complete
 - 🏛️ **Datacenter** (BSL 1.1): ⏳ Planned - 0% Complete
 
-**Honest Assessment:** We have a working FTP server with the full Production feature set implemented. File transfers work through both passive and active mode data connections, all core FTP commands are functional, FTPS/SSL is integrated, security hardening (PAM, chroot, privilege dropping, IP access control, rate limiting) is in place, and advanced features — virtual hosting, per-host/per-user quotas, session limits, groups, guest accounts, and persistent (JSON) user storage — are implemented. Remaining production work is on-the-wire compression integration, broader test coverage, and environment/packaging verification.
+**Honest Assessment:** Working FTP/FTPS server with virtual hosting, persistent users, MODE Z compression, and verified PASV/PORT transfers. Remaining work is Enterprise/Datacenter and optional coverage/pen-test bars — not Production polish.
 
 ---
 
@@ -21,8 +21,8 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 **License:** Apache 2.0  
 **Target:** Small to medium deployments, single-server installations  
-**Status:** ✅ Feature-complete through v0.3.0  
-**Current Progress:** v0.1.0 released; v0.2.0 and v0.3.0 complete
+**Status:** ✅ Feature-complete through v0.4.0  
+**Current Progress:** v0.1.0–v0.4.0 complete
 
 ### Version 0.1.0 - Foundation Release
 
@@ -309,9 +309,10 @@ This document provides a detailed checklist for tracking progress on the simple-
 - [x] **Memory-mapped I/O** - Efficient large file handling (v0.2.0)
   - ✅ TransferConfig (use_sendfile, use_mmap, buffer_size) parsed from INI/JSON/YAML
   - ✅ handleRETR: sendfile() on Linux/macOS, mmap+send fallback, read/send fallback; throttling preserved
-- [ ] **Compression Support** - gzip, bzip2 compression (v0.2.0)
-  - ✅ Compression class implemented (90% complete)
-  - ⚠️ Integration point ready; MODE Z / on-the-fly compression in transfers planned for later
+- [x] **Compression Support** - MODE Z streaming zlib on RETR/STOR (v0.4.0)
+  - ✅ Compression class (gzip/bzip2 buffers) plus `ZlibStream`
+  - ✅ MODE / FEAT MODE Z when `transfer.enable_compression`
+  - ✅ REST/APPE rejected while MODE Z is active
 
 ---
 
@@ -351,6 +352,18 @@ This document provides a detailed checklist for tracking progress on the simple-
   - ✅ Load/save in users JSON
 - [x] **Persistent User Storage** - Database/file-based user management
   - ✅ security.user_file config; load/save JSON in FTPUserManager; connection uses config path
+
+---
+
+### Version 0.4.0 - Production Polish
+
+**Status:** ✅ **COMPLETE** (2026-08-30)
+
+- [x] Wire PORT (and EPRT) into the command dispatcher
+- [x] MODE Z on RETR/STOR with `transfer.enable_compression`
+- [x] Protocol integration tests (PASV, PORT, HOST, MODE Z, AUTH TLS)
+- [x] macOS config test, launchd plist lint, foreground smoke, native CPack `.pkg`
+- [x] Document REST/APPE + MODE Z as unsupported
 
 ---
 
@@ -769,6 +782,7 @@ This document provides a detailed checklist for tracking progress on the simple-
 | **Production** | 0.1.0 | Q1 2025 | ✅ Released | 95% | Foundation, Core FTP, Data Connections |
 | **Production** | 0.2.0 | Q2 2025 | ✅ Complete | 100% | SSL/TLS, Advanced Security, Performance |
 | **Production** | 0.3.0 | Q2 2025 | ✅ Complete | 100% | Virtual Hosting, Advanced User Management |
+| **Production** | 0.4.0 | Q3 2026 | ✅ Complete | 100% | MODE Z, PORT/EPRT, protocol tests |
 | **Enterprise** | 0.1.0 | Q3 2025 | ⏳ Planned | 0% | Web UI, REST API, Management Interface |
 | **Enterprise** | 0.2.0 | Q3 2025 | ⏳ Planned | 0% | High Availability, Clustering |
 | **Enterprise** | 0.3.0 | Q4 2025 | ⏳ Planned | 0% | SNMP, Integrations, Plugins |
@@ -804,7 +818,7 @@ This document provides a detailed checklist for tracking progress on the simple-
 
 ---
 
-*Last Updated: May 2026*  
+*Last Updated: August 2026*  
 *Next Review: Before Enterprise v0.1.0 kickoff*  
 *Maintained by: SimpleDaemons Development Team*  
 *See [PROGRESS_REPORT.md](PROGRESS_REPORT.md) for detailed honest assessment*

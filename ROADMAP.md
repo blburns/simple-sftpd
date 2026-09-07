@@ -1,6 +1,8 @@
 # Simple Secure FTP Daemon (simple-sftpd) - Roadmap
 
-This document outlines the development roadmap for simple-sftpd. For item-level tracking, see [project/ROADMAP_CHECKLIST.md](project/ROADMAP_CHECKLIST.md).
+This document outlines the development roadmap for simple-sftpd. For item-level tracking, see [project/ROADMAP_CHECKLIST.md](project/ROADMAP_CHECKLIST.md). Overview: [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md).
+
+**Honesty note:** Prefer [project/PROGRESS_REPORT.md](project/PROGRESS_REPORT.md) when phase checkmarks may be historical.
 
 ## Project Vision
 
@@ -14,22 +16,15 @@ A modern, secure FTP server with:
 
 ## Current State
 
-**Production line:** feature-complete through **v0.3.0** (released 2026-05-30)  
+**Production line:** feature-complete through **v0.4.0** (polish: MODE Z, PORT dispatch, protocol tests)  
 **Enterprise / Datacenter:** planned (BSL 1.1), 0% complete
 
 | Version | Status | Summary |
 |---------|--------|---------|
 | **0.1.0** | ✅ Released (2025-11-27) | Core FTP, passive mode, config, logging, CLI, tests |
 | **0.2.0** | ✅ Complete | FTPS, PAM, chroot, active mode, resume/append/rename, pooling, IPv6, audit logging |
-| **0.3.0** | ✅ Complete | Virtual hosting (HOST), persistent users, groups, guest accounts, quotas, session limits |
-| **0.4.0+** | ⏳ Planned | Compression on wire, CLI virtual-host management, Enterprise features |
-
-### Production polish (post–v0.3.0)
-
-- ⏳ Wire `Compression` into RETR/STOR (class implemented, not integrated)
-- ⏳ Expand test coverage (~40% → 60%+ target)
-- ⏳ Environment verification (systemd, launchd, Windows service, Docker, packages)
-- ⏳ Wire `Compression` into RETR/STOR (class implemented, not integrated)
+| **0.3.0** | ✅ Complete | Virtual hosting (HOST), persistent users, groups, guest accounts, quotas, session limits, `virtual` CLI |
+| **0.4.0** | ✅ Complete (2026-08-30) | MODE Z compression, PORT/EPRT dispatch, protocol integration tests, env smoke |
 
 ---
 
@@ -59,20 +54,21 @@ A modern, secure FTP server with:
 
 **Status:** ✅ **COMPLETE**
 
-**Virtual hosting:** HOST command, per-host root/users/SSL, quotas, session limits, custom error messages
+**Virtual hosting:** HOST command, per-host root/users/SSL, quotas, session limits, custom error messages, `simple-sftpd virtual` CLI
 
 **User management:** Persistent JSON storage (`security.user_file`), groups, guest accounts with expiry, per-user storage quotas, SessionTracker
 
 ---
 
-## Version 0.4.0 - Production Polish (Planned)
+## Version 0.4.0 - Production Polish
 
-**Target:** Q3 2026
+**Status:** ✅ **COMPLETE** (2026-08-30)
 
-- On-the-wire compression (gzip/bzip2) in transfer path
-- `simple-sftpd virtual` CLI implementation
-- Expanded integration tests (SSL, PAM, virtual hosts, sessions)
-- Packaging and service verification on all target platforms
+- On-the-wire MODE Z (streaming zlib) on RETR/STOR; `transfer.enable_compression`
+- PORT dispatched (plus EPRT); active-mode transfers verified
+- Integration tests: PASV, PORT, HOST, MODE Z, AUTH TLS smoke
+- macOS config/`test`, launchd plist lint, foreground smoke, native CPack `.pkg`
+- REST/APPE not combined with MODE Z (explicit 550)
 
 ---
 
@@ -116,4 +112,4 @@ See [docs/datacenter/README.md](docs/datacenter/README.md).
 
 **Legend:** ✅ Complete · 🔄 In progress · ⏳ Planned · ❌ Cancelled
 
-*Last Updated: May 2026*
+*Last Updated: August 2026*

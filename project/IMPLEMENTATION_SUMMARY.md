@@ -1,5 +1,5 @@
 # Implementation Summary - Recent Improvements
-**Date:** May 2026  
+**Date:** August 2026  
 **Product Version:** Production Version (Apache 2.0)
 
 ## 🎯 Overview
@@ -7,7 +7,7 @@
 This document summarizes the major improvements and feature completions for the **Production Version**. The v0.1.0 foundation has been released, and the v0.2.0 (security/performance) and v0.3.0 (virtual hosting, advanced user management) feature work is complete. The original v0.1.0 completion sprint (~75% → 87%) is recorded below, followed by the v0.2.0/v0.3.0 summary.
 
 **Product Versions:**
-- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.3.0 (v0.1.0 released)
+- **🏭 Production Version (Apache 2.0):** ✅ Feature-complete through v0.4.0
 - **🏢 Enterprise Version (BSL 1.1):** ⏳ 0% Complete - Planned
 - **🏛️ Datacenter Version (BSL 1.1):** ⏳ 0% Complete - Planned
 
@@ -294,10 +294,17 @@ After the v0.1.0 foundation, the Production line gained its full security, perfo
 - ✅ **Session limits**: `SessionTracker` per-user and per-host concurrent sessions
 - ✅ **Guest accounts**: `is_guest`, `expires_at`, `isExpired()` with login rejection
 
-### Remaining Production polish
-- On-the-wire compression integration (MODE Z)
-- Test coverage expansion (~40% → 60%+)
-- Environment/packaging verification (systemd/launchd/Windows/Docker/packages)
+### v0.4.0 - Production Polish (Complete)
+- ✅ **PORT/EPRT** wired into the command dispatcher (active-mode transfers work)
+- ✅ **MODE Z** streaming zlib on RETR/STOR; `transfer.enable_compression`; FEAT
+- ✅ REST/APPE rejected while MODE Z is active
+- ✅ Protocol integration tests: PASV, PORT, HOST, MODE Z, AUTH TLS
+- ✅ macOS Phase 1: config test, launchd user-agent, native CPack `.pkg`
+
+### Remaining (out of Production polish)
+- Optional coverage/load bars
+- Linux systemd/Docker/Windows verification on those hosts
+- Enterprise / Datacenter
 
 ---
 
@@ -310,7 +317,7 @@ After the v0.1.0 foundation, the Production line gained its full security, perfo
 
 ---
 
-*Last Updated: May 2026*  
+*Last Updated: August 2026*  
 *Next Review: Before Enterprise v0.1.0 kickoff*  
 *Focus: Production Version (Apache 2.0)*
 

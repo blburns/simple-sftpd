@@ -1,6 +1,6 @@
 # Simple Secure FTP Daemon (simple-sftpd)
 
-**Production v0.3.0** · Apache 2.0
+**Production v0.4.0** · Apache 2.0
 
 A secure, configurable FTP server written in C++17 for Linux, macOS, FreeBSD, and Windows.
 
@@ -205,7 +205,7 @@ The main configuration file (`simple-sftpd.conf`) supports both INI and JSON for
 ```ini
 # Global server settings
 server_name = "Simple-Secure FTP Daemon"
-server_version = "0.3.0"
+server_version = "0.4.0"
 enable_ssl = true
 enable_virtual_hosts = true
 
@@ -691,8 +691,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Status | Highlights |
 |---------|--------|------------|
-| **v0.3.0** | Current | Virtual hosting (HOST), persistent JSON users, groups, guest accounts, session/storage quotas |
+| **v0.4.0** | Current | MODE Z compression, PORT/EPRT dispatch, protocol integration tests |
+| **v0.3.0** | Released | Virtual hosting (HOST), persistent JSON users, groups, guest accounts, session/storage quotas |
 | **v0.2.0** | Released | FTPS, PAM, chroot, active mode, resume/append/rename, connection pooling, sendfile/mmap, IPv6 |
 | **v0.1.0** | Released | Core FTP server, passive mode, multi-format config, CLI, logging, rate limiting |
 
-**Known gaps (Production polish):** on-the-wire compression not yet wired into transfers; broader test coverage and packaging verification ongoing.
+**Production line:** complete through v0.4.0. Enterprise / Datacenter remain planned.

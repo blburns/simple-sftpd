@@ -126,6 +126,19 @@ docker stop sftpd-test && docker rm sftpd-test
 
 ## 8. Packaging
 
+Native CPack is the packaging path (`make package` / `make package-pkg`). Docker is not used.
+
+**macOS (PKG):**
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+make package-pkg
+# artifact: dist/simple-sftpd-VERSION-macos-intel.pkg (or macos-apple)
+```
+
+`packaging/macos/pkg/rebuild-from-cpack.sh` runs after CPack so Installer.app does not see a leaked `Contents/` payload.
+
 **Linux (DEB):**
 
 ```bash
@@ -134,11 +147,30 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCPACK_GENERATOR=DEB
 make package
 sudo dpkg -i simple-sftpd-*.deb
 simple-sftpd --version
-sudo systemctl start simple-sftpd  # if systemd unit installed
+# Packages do not start the daemon; enable/start yourself after editing TLS and users.
 ```
 
-**Success:** Package builds and installs; binary runs; service starts if applicable.
+**Success:** Package builds; binary is present; service is installed but not started.
 
 ---
 
 *After completing these, check off the corresponding items in [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md).*
+
+---
+
+## Phase 1 results (2026-08-30, macOS)
+
+Recorded on this development machine. Check only what actually ran.
+
+| Item | Result |
+|------|--------|
+| Config test | **Pass** — `simple-sftpd test --config` on `config/simple/` INI, JSON, and YAML |
+| launchd plist | **Pass** — `plutil -lint` on `etc/launchd/` and `deployment/launchd/` plists |
+| launchd start/stop | **Pass (user LaunchAgent)** — bootstrap `gui/$UID`, 220 welcome + QUIT 221 on 127.0.0.1:21213, then bootout. System-wide `/Library/LaunchDaemons` install was **not** run |
+| Foreground smoke | **Pass** — same 220/221 path (also via launchd agent) |
+| Docker | **Not used** — packaging is native CPack (simple-ldapd model) |
+| Packaging | **Pass (macOS)** — CPack + `rebuild-from-cpack.sh` → `simple-sftpd-0.4.0-macos-intel.pkg` (no `-production-` infix; no gtest payload) |
+| Linux systemd / DEB / RPM | **Not run here** — no Linux host; treat as CI-aspirational |
+| Windows service / build | **Not run** — no Windows host |
+
+Windows and Linux remain documented / CI-aspirational.
