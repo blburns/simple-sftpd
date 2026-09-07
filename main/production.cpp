@@ -21,7 +21,7 @@
 #include "simple-sftpd/utils/logger.hpp"
 
 #ifndef SIMPLE_SFTPD_VERSION
-#define SIMPLE_SFTPD_VERSION "0.4.0"
+#define SIMPLE_SFTPD_VERSION "0.5.0"
 #endif
 #include "simple-sftpd/user/user_manager.hpp"
 #include "simple-sftpd/user/user.hpp"

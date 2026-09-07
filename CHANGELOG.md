@@ -5,6 +5,27 @@ All notable changes to simple-sftpd will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-07
+
+### Added
+- **RFC command completeness** — the dispatcher previously answered `502` for a dozen standard commands:
+  - `CDUP`/`XCUP` (RFC 959) parent-directory navigation
+  - `EPSV` including `EPSV ALL` (RFC 2428), so IPv6 and NAT'd clients can use passive mode
+  - `MLSD`/`MLST` machine-readable listings and `MDTM` modification times (RFC 3659)
+  - `STAT` (server status, and per-path status over the control connection)
+  - `OPTS` (`UTF8`, `MLST`), `ABOR`, `STOU`, `SITE` (`HELP`, `CHMOD`, `UMASK`), `ALLO`, `HELP`
+- FEAT now advertises `EPSV`, `MDTM`, `MLST`, `TVFS`, and `UTF8`
+- Protocol tests for every new command, plus an explicit path-traversal test
+
+### Fixed
+- **Path containment was unsound**: `validatePath()` re-ran `resolvePath()` on an
+  already-resolved path, re-applying the home prefix to real absolute paths, and
+  fell back to a substring compare when canonicalization failed. Containment now
+  compares whole path components against the home and virtual-host roots, and
+  uses `weakly_canonical` so not-yet-created upload targets are checked correctly.
+- Integration tests no longer read or write the developer's real `~/.simple-sftpd`
+  user and virtual-host stores; the fixture is now hermetic.
+
 ## [0.4.0] - 2026-08-30
 
 ### Added

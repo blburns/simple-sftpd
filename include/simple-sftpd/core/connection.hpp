@@ -77,6 +77,21 @@ private:
     void handleRNFR(const std::string& filename);
     void handleRNTO(const std::string& filename);
     void handleHOST(const std::string& hostname);
+    void handleCDUP();
+    void handleEPSV(const std::string& argument);
+    void handleMLSD(const std::string& path);
+    void handleMLST(const std::string& path);
+    void handleMDTM(const std::string& filename);
+    void handleSTAT(const std::string& argument);
+    void handleOPTS(const std::string& argument);
+    void handleABOR();
+    void handleSTOU(const std::string& filename);
+    void handleSITE(const std::string& argument);
+    void handleALLO(const std::string& argument);
+    void handleHELP(const std::string& argument);
+
+    // Machine listing helpers (RFC 3659)
+    std::string buildMachineFacts(const std::string& path, const std::string& name) const;
     
     // Data Connection Management
     int createPassiveDataSocket();
@@ -139,6 +154,12 @@ private:
     // Transfer resume state
     std::streampos resume_position_;
     std::string rename_from_path_;
+
+    // Extended passive / machine listing state (v0.5.0)
+    bool epsv_all_ = false;
+    bool utf8_enabled_ = true;
+    // Set by STOU so the 150 reply can advertise the generated name (RFC 1123)
+    std::string store_unique_name_;
     
     // Virtual hosting (v0.3.0)
     std::shared_ptr<FTPVirtualHostManager> virtual_host_manager_;

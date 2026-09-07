@@ -50,6 +50,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <chrono>
+#include <ctime>
 #include <thread>
 #ifndef _WIN32
 #include <pwd.h>
@@ -71,6 +72,31 @@ uint64_t getDirectorySize(const std::string& path) {
         }
     } catch (const std::exception&) {}
     return total;
+}
+
+// RFC 3659 timestamps are UTC in YYYYMMDDHHMMSS form.
+bool fileModifiedTimeUtc(const std::string& path, std::string& out) {
+    struct stat st {};
+    if (::stat(path.c_str(), &st) != 0) {
+        return false;
+    }
+    std::time_t mtime = static_cast<std::time_t>(st.st_mtime);
+    std::tm tm {};
+#ifdef _WIN32
+    if (gmtime_s(&tm, &mtime) != 0) {
+        return false;
+    }
+#else
+    if (gmtime_r(&mtime, &tm) == nullptr) {
+        return false;
+    }
+#endif
+    char buffer[16];
+    if (std::strftime(buffer, sizeof(buffer), "%Y%m%d%H%M%S", &tm) == 0) {
+        return false;
+    }
+    out = buffer;
+    return true;
 }
 } // namespace
 
@@ -232,6 +258,11 @@ void FTPConnection::handleClient() {
             sendResponse(" REST STREAM");
             sendResponse(" PORT");
             sendResponse(" EPRT");
+            sendResponse(" EPSV");
+            sendResponse(" MDTM");
+            sendResponse(" MLST type*;size*;modify*;perm*;");
+            sendResponse(" TVFS");
+            sendResponse(" UTF8");
             if (virtual_host_manager_ && !virtual_host_manager_->listVirtualHosts().empty()) {
                 sendResponse(" HOST");
             }
@@ -252,16 +283,40 @@ void FTPConnection::handleClient() {
             handlePROT(argument);
         } else if (command == "HOST") {
             handleHOST(argument);
+        } else if (command == "OPTS") {
+            handleOPTS(argument);
+        } else if (command == "HELP") {
+            handleHELP(argument);
+        } else if (command == "ABOR") {
+            handleABOR();
         } else if (authenticated_) {
             // Commands that require authentication
             if (command == "PWD" || command == "XPWD") {
                 handlePWD();
             } else if (command == "CWD" || command == "XCWD") {
                 handleCWD(argument);
+            } else if (command == "CDUP" || command == "XCUP") {
+                handleCDUP();
             } else if (command == "LIST" || command == "NLST") {
                 handleLIST(argument);
+            } else if (command == "MLSD") {
+                handleMLSD(argument);
+            } else if (command == "MLST") {
+                handleMLST(argument);
+            } else if (command == "MDTM") {
+                handleMDTM(argument);
+            } else if (command == "STAT") {
+                handleSTAT(argument);
+            } else if (command == "SITE") {
+                handleSITE(argument);
+            } else if (command == "ALLO") {
+                handleALLO(argument);
+            } else if (command == "STOU") {
+                handleSTOU(argument);
             } else if (command == "PASV") {
                 handlePASV();
+            } else if (command == "EPSV") {
+                handleEPSV(argument);
             } else if (command == "PORT") {
                 handlePORT(argument);
             } else if (command == "EPRT") {
@@ -562,6 +617,11 @@ void FTPConnection::handleLIST(const std::string& path) {
 }
 
 void FTPConnection::handlePASV() {
+    if (epsv_all_) {
+        sendResponse("501 EPSV ALL is in effect, use EPSV");
+        return;
+    }
+
     // Disable active mode if it was enabled
     active_mode_enabled_ = false;
     closeDataSocket(); // Close any existing passive socket
@@ -578,6 +638,11 @@ void FTPConnection::handlePASV() {
 }
 
 void FTPConnection::handlePORT(const std::string& address_port) {
+    if (epsv_all_) {
+        sendResponse("501 EPSV ALL is in effect, use EPSV");
+        return;
+    }
+
     // Parse PORT command: PORT h1,h2,h3,h4,p1,p2
     // Example: PORT 192,168,1,100,4,28
     std::vector<int> parts;
@@ -621,6 +686,11 @@ void FTPConnection::handlePORT(const std::string& address_port) {
 }
 
 void FTPConnection::handleEPRT(const std::string& endpoint) {
+    if (epsv_all_) {
+        sendResponse("501 EPSV ALL is in effect, use EPSV");
+        return;
+    }
+
     // RFC 2428: EPRT <d><net-prt><d><net-addr><d><tcp-port><d>
     if (endpoint.size() < 7) {
         sendResponse("501 Invalid EPRT command format");
@@ -666,6 +736,358 @@ void FTPConnection::handleEPRT(const std::string& endpoint) {
     active_mode_enabled_ = true;
     logger_->info("Active mode enabled (EPRT): " + active_mode_ip_ + ":" + std::to_string(active_mode_port_));
     sendResponse("200 EPRT command successful");
+}
+
+void FTPConnection::handleCDUP() {
+    const std::string parent = resolvePath("..");
+
+    if (!validatePath(parent)) {
+        // Refusing here is what keeps CDUP from walking out of the home directory.
+        sendResponse("550 Invalid path");
+        return;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::is_directory(parent, ec)) {
+        sendResponse("550 Failed to change directory");
+        return;
+    }
+
+    current_directory_ = parent;
+    sendResponse("250 CDUP command successful");
+}
+
+void FTPConnection::handleEPSV(const std::string& argument) {
+    std::string arg = argument;
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+    if (arg == "ALL") {
+        epsv_all_ = true;
+        sendResponse("200 EPSV ALL command successful");
+        return;
+    }
+
+    if (!arg.empty() && arg != "1" && arg != "2") {
+        sendResponse("522 Network protocol not supported, use (1)");
+        return;
+    }
+
+    active_mode_enabled_ = false;
+    closeDataSocket();
+
+    const int port = createPassiveDataSocket();
+    if (port < 0) {
+        sendResponse("425 Can't open passive connection");
+        return;
+    }
+
+    sendResponse("229 Entering Extended Passive Mode (|||" + std::to_string(port) + "|)");
+    logger_->debug("Extended passive mode enabled on port " + std::to_string(port));
+}
+
+std::string FTPConnection::buildMachineFacts(const std::string& path, const std::string& name) const {
+    std::error_code ec;
+    const bool is_directory = std::filesystem::is_directory(path, ec);
+
+    std::string facts = std::string("type=") + (is_directory ? "dir" : "file") + ";";
+
+    if (!is_directory) {
+        const auto size = std::filesystem::file_size(path, ec);
+        if (!ec) {
+            facts += "size=" + std::to_string(size) + ";";
+        }
+    }
+
+    std::string modify;
+    if (fileModifiedTimeUtc(path, modify)) {
+        facts += "modify=" + modify + ";";
+    }
+
+    const bool writable = current_user_ && current_user_->hasPermission("write", path);
+    if (is_directory) {
+        facts += std::string("perm=") + (writable ? "elcmpd" : "el") + ";";
+    } else {
+        facts += std::string("perm=") + (writable ? "adfrw" : "r") + ";";
+    }
+
+    return facts + " " + name;
+}
+
+void FTPConnection::handleMLSD(const std::string& path) {
+    if (!hasPermission("list", path)) {
+        sendResponse("550 Permission denied");
+        return;
+    }
+
+    const std::string target = path.empty() ? current_directory_ : resolvePath(path);
+    if (!validatePath(target)) {
+        sendResponse("550 Invalid path");
+        return;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::is_directory(target, ec)) {
+        sendResponse("550 Not a directory");
+        return;
+    }
+
+    sendResponse("150 Opening data connection for MLSD");
+
+    const int data_fd = acceptDataConnection();
+    if (data_fd < 0) {
+        sendResponse("425 Can't open data connection");
+        return;
+    }
+
+    std::string listing;
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(target)) {
+            listing += buildMachineFacts(entry.path().string(),
+                                         entry.path().filename().string()) + "\r\n";
+        }
+    } catch (const std::exception& e) {
+        logger_->error("Error listing directory: " + std::string(e.what()));
+        close(data_fd);
+        sendResponse("550 Error listing directory");
+        return;
+    }
+
+    send(data_fd, listing.c_str(), listing.length(), 0);
+    close(data_fd);
+    sendResponse("226 Transfer complete");
+}
+
+void FTPConnection::handleMLST(const std::string& path) {
+    const std::string target = path.empty() ? current_directory_ : resolvePath(path);
+    if (!validatePath(target)) {
+        sendResponse("550 Invalid path");
+        return;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(target, ec)) {
+        sendResponse("550 File or directory not found");
+        return;
+    }
+
+    const std::string name = path.empty() ? current_directory_ : path;
+    sendResponse("250-Listing " + name);
+    sendResponse(" " + buildMachineFacts(target, name));
+    sendResponse("250 End");
+}
+
+void FTPConnection::handleMDTM(const std::string& filename) {
+    if (filename.empty()) {
+        sendResponse("501 MDTM requires a file name");
+        return;
+    }
+
+    const std::string filepath = resolvePath(filename);
+    if (!validatePath(filepath)) {
+        sendResponse("550 Invalid path");
+        return;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(filepath, ec)) {
+        sendResponse("550 File not found");
+        return;
+    }
+
+    std::string modify;
+    if (!fileModifiedTimeUtc(filepath, modify)) {
+        sendResponse("550 Could not determine modification time");
+        return;
+    }
+
+    sendResponse("213 " + modify);
+}
+
+void FTPConnection::handleSTAT(const std::string& argument) {
+    if (argument.empty()) {
+        sendResponse("211-simple-sftpd status");
+        sendResponse(" Logged in as: " + (username_.empty() ? std::string("(none)") : username_));
+        sendResponse(" Current directory: " + current_directory_);
+        sendResponse(" Transfer type: " + transfer_type_ + ", mode: " + transfer_mode_);
+        sendResponse(std::string(" Control connection: ") + (ssl_active_ ? "TLS" : "plaintext"));
+        sendResponse(" Data protection: " + protection_level_);
+        sendResponse("211 End of status");
+        return;
+    }
+
+    // STAT <path> reports a listing over the control connection, no data channel.
+    const std::string target = resolvePath(argument);
+    if (!validatePath(target)) {
+        sendResponse("550 Invalid path");
+        return;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(target, ec)) {
+        sendResponse("550 File or directory not found");
+        return;
+    }
+
+    sendResponse("213-Status of " + argument);
+    if (std::filesystem::is_directory(target, ec)) {
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(target)) {
+                sendResponse(" " + buildMachineFacts(entry.path().string(),
+                                                     entry.path().filename().string()));
+            }
+        } catch (const std::exception& e) {
+            logger_->error("Error listing directory: " + std::string(e.what()));
+        }
+    } else {
+        sendResponse(" " + buildMachineFacts(target,
+                                             std::filesystem::path(target).filename().string()));
+    }
+    sendResponse("213 End of status");
+}
+
+void FTPConnection::handleOPTS(const std::string& argument) {
+    std::istringstream iss(argument);
+    std::string option;
+    std::string value;
+    iss >> option >> value;
+    std::transform(option.begin(), option.end(), option.begin(), ::toupper);
+    std::transform(value.begin(), value.end(), value.begin(), ::toupper);
+
+    if (option == "UTF8") {
+        if (value.empty() || value == "ON") {
+            utf8_enabled_ = true;
+            sendResponse("200 UTF8 set to on");
+        } else if (value == "OFF") {
+            utf8_enabled_ = false;
+            sendResponse("200 UTF8 set to off");
+        } else {
+            sendResponse("501 Invalid UTF8 option");
+        }
+        return;
+    }
+
+    if (option == "MLST") {
+        sendResponse("200 MLST OPTS type;size;modify;perm;");
+        return;
+    }
+
+    sendResponse("501 Option not supported");
+}
+
+void FTPConnection::handleABOR() {
+    // Transfers run synchronously on this connection's thread, so an ABOR that
+    // reaches the dispatcher means nothing is in flight.
+    closeDataSocket();
+    sendResponse("226 ABOR command successful");
+}
+
+void FTPConnection::handleSTOU(const std::string& filename) {
+    const std::string base = filename.empty()
+        ? std::string("ftpd")
+        : std::filesystem::path(filename).filename().string();
+
+    std::string unique;
+    for (int attempt = 0; attempt < 10000; ++attempt) {
+        const std::string candidate = base + "." + std::to_string(attempt);
+        std::error_code ec;
+        if (!std::filesystem::exists(current_directory_ + "/" + candidate, ec)) {
+            unique = candidate;
+            break;
+        }
+    }
+
+    if (unique.empty()) {
+        sendResponse("452 Could not allocate a unique file name");
+        return;
+    }
+
+    // RFC 1123 requires the 150 reply to carry the generated name; STOR reads this.
+    store_unique_name_ = unique;
+    resume_position_ = 0;
+    handleSTOR(unique);
+    store_unique_name_.clear();
+}
+
+void FTPConnection::handleSITE(const std::string& argument) {
+    std::istringstream iss(argument);
+    std::string subcommand;
+    iss >> subcommand;
+    std::transform(subcommand.begin(), subcommand.end(), subcommand.begin(), ::toupper);
+
+    if (subcommand.empty() || subcommand == "HELP") {
+        sendResponse("214-The following SITE commands are recognized:");
+        sendResponse(" CHMOD <mode> <path>");
+        sendResponse(" UMASK");
+        sendResponse("214 SITE help complete");
+        return;
+    }
+
+    if (subcommand == "UMASK") {
+        sendResponse("200 UMASK is fixed at 022");
+        return;
+    }
+
+    if (subcommand == "CHMOD") {
+        std::string mode_text;
+        std::string target;
+        iss >> mode_text;
+        std::getline(iss, target);
+        target.erase(0, target.find_first_not_of(" \t"));
+
+        if (mode_text.empty() || target.empty()) {
+            sendResponse("501 Usage: SITE CHMOD <mode> <path>");
+            return;
+        }
+        if (!hasPermission("write", target)) {
+            sendResponse("550 Permission denied");
+            return;
+        }
+
+        const std::string path = resolvePath(target);
+        if (!validatePath(path)) {
+            sendResponse("550 Invalid path");
+            return;
+        }
+
+        unsigned long mode = 0;
+        try {
+            mode = std::stoul(mode_text, nullptr, 8);
+        } catch (const std::exception&) {
+            sendResponse("501 Invalid mode");
+            return;
+        }
+
+        std::error_code ec;
+        std::filesystem::permissions(path,
+                                     static_cast<std::filesystem::perms>(mode & 07777),
+                                     std::filesystem::perm_options::replace, ec);
+        if (ec) {
+            sendResponse("550 SITE CHMOD failed");
+            return;
+        }
+        sendResponse("200 SITE CHMOD command successful");
+        return;
+    }
+
+    sendResponse("500 Unknown SITE command");
+}
+
+void FTPConnection::handleALLO(const std::string& argument) {
+    (void)argument;
+    sendResponse("202 ALLO not required, storage is allocated on demand");
+}
+
+void FTPConnection::handleHELP(const std::string& argument) {
+    (void)argument;
+    sendResponse("214-The following commands are recognized:");
+    sendResponse(" USER PASS QUIT NOOP SYST FEAT OPTS HELP HOST");
+    sendResponse(" AUTH PBSZ PROT");
+    sendResponse(" PWD XPWD CWD XCWD CDUP XCUP");
+    sendResponse(" LIST NLST MLSD MLST STAT SIZE MDTM");
+    sendResponse(" PASV EPSV PORT EPRT MODE TYPE ALLO ABOR");
+    sendResponse(" RETR STOR STOU APPE REST DELE");
+    sendResponse(" MKD XMKD RMD XRMD RNFR RNTO SITE");
+    sendResponse("214 Help command successful");
 }
 
 bool FTPConnection::compressionEnabled() const {
@@ -1001,7 +1423,11 @@ void FTPConnection::handleSTOR(const std::string& filename) {
         }
     }
 
-    sendResponse("150 Opening " + transfer_type_ + " mode data connection");
+    if (store_unique_name_.empty()) {
+        sendResponse("150 Opening " + transfer_type_ + " mode data connection");
+    } else {
+        sendResponse("150 FILE: " + store_unique_name_);
+    }
     
     // Accept data connection
     int data_fd = acceptDataConnection();
@@ -1193,66 +1619,70 @@ void FTPConnection::handleRMD(const std::string& dirname) {
     }
 }
 
+namespace {
+
+// weakly_canonical resolves symlinks and ".." for paths whose trailing
+// components do not exist yet, which is what STOR/MKD targets look like.
+std::filesystem::path normalizeForComparison(const std::filesystem::path& path) {
+    std::error_code ec;
+    std::filesystem::path normalized = std::filesystem::weakly_canonical(path, ec);
+    if (ec || normalized.empty()) {
+        normalized = path.lexically_normal();
+    }
+    return normalized;
+}
+
+// True when `child` is `parent` or lives underneath it. Compares whole path
+// components so that "/srv/ftproot-evil" is not treated as under "/srv/ftproot".
+bool isWithin(const std::filesystem::path& child, const std::filesystem::path& parent) {
+    auto parent_it = parent.begin();
+    auto child_it = child.begin();
+    for (; parent_it != parent.end(); ++parent_it, ++child_it) {
+        if (child_it == child.end() || *child_it != *parent_it) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 std::string FTPConnection::resolvePath(const std::string& path) {
     if (path.empty()) {
         return current_directory_;
     }
-    
-    std::string resolved;
+
+    std::filesystem::path candidate;
     if (path[0] == '/') {
-        // Absolute path - resolve relative to user's home directory
-        if (current_user_) {
-            resolved = current_user_->getHomeDirectory() + path;
-        } else {
-            resolved = path;
-        }
+        // Absolute paths are virtual: the user's home directory is their root.
+        const std::string home = current_user_ ? current_user_->getHomeDirectory() : std::string("/");
+        candidate = std::filesystem::path(home) / std::filesystem::path(path).relative_path();
     } else {
-        // Relative path
-        resolved = current_directory_ + "/" + path;
+        candidate = std::filesystem::path(current_directory_) / path;
     }
-    
-    // Normalize path (remove .. and .)
-    std::filesystem::path p(resolved);
-    try {
-        return std::filesystem::canonical(p).string();
-    } catch (const std::exception&) {
-        // If canonical fails, at least normalize
-        return p.lexically_normal().string();
-    }
+
+    return normalizeForComparison(candidate).string();
 }
 
+// Expects a path already run through resolvePath(); re-resolving here would
+// re-apply the home prefix to an absolute real path and defeat the check.
 bool FTPConnection::validatePath(const std::string& path) {
     if (!current_user_) {
         return false;
     }
-    
-    std::string resolved = resolvePath(path);
-    
-    // Check if resolved path is within home directory
-    if (!isPathWithinHome(resolved)) {
+
+    if (!isPathWithinHome(path)) {
         return false;
     }
-    
-    // When virtual host is set, also constrain to host root
+
+    // When a virtual host is selected, also constrain to its root.
     if (current_virtual_host_) {
-        std::string root = current_virtual_host_->getRootDirectory();
-        if (!root.empty()) {
-            std::filesystem::path res_p(resolved), root_p(root);
-            try {
-                std::filesystem::path canonical_res = std::filesystem::canonical(res_p);
-                std::filesystem::path canonical_root = std::filesystem::canonical(root_p);
-                auto res_it = canonical_res.begin();
-                auto root_it = canonical_root.begin();
-                for (; root_it != canonical_root.end(); ++root_it, ++res_it) {
-                    if (res_it == canonical_res.end() || *res_it != *root_it) {
-                        return false;
-                    }
-                }
-            } catch (const std::exception&) {
-                return false;
-            }
+        const std::string root = current_virtual_host_->getRootDirectory();
+        if (!root.empty() && !isWithin(normalizeForComparison(path), normalizeForComparison(root))) {
+            return false;
         }
     }
+
     return true;
 }
 
@@ -1260,31 +1690,9 @@ bool FTPConnection::isPathWithinHome(const std::string& path) {
     if (!current_user_) {
         return false;
     }
-    
-    std::string home = current_user_->getHomeDirectory();
-    std::filesystem::path path_p(path);
-    std::filesystem::path home_p(home);
-    
-    try {
-        std::filesystem::path canonical_path = std::filesystem::canonical(path_p);
-        std::filesystem::path canonical_home = std::filesystem::canonical(home_p);
-        
-        // Check if canonical_path starts with canonical_home
-        auto it = canonical_path.begin();
-        auto home_it = canonical_home.begin();
-        
-        while (home_it != canonical_home.end()) {
-            if (it == canonical_path.end() || *it != *home_it) {
-                return false;
-            }
-            ++it;
-            ++home_it;
-        }
-        return true;
-    } catch (const std::exception&) {
-        // If canonical fails, do simple string comparison
-        return path.find(home) == 0;
-    }
+
+    return isWithin(normalizeForComparison(path),
+                    normalizeForComparison(current_user_->getHomeDirectory()));
 }
 
 bool FTPConnection::hasPermission(const std::string& operation, const std::string& path) {

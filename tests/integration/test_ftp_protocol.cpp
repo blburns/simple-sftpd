@@ -131,6 +131,25 @@ bool parsePasv(const std::string& line, std::string& ip, int& port) {
     return true;
 }
 
+// RFC 2428: 229 Entering Extended Passive Mode (|||port|)
+bool parseEpsv(const std::string& line, int& port) {
+    auto l = line.find('(');
+    auto r = line.find(')');
+    if (l == std::string::npos || r == std::string::npos || r <= l) {
+        return false;
+    }
+    std::string inner = line.substr(l + 1, r - l - 1);
+    if (inner.size() < 4 || inner.substr(0, 3) != "|||" || inner.back() != '|') {
+        return false;
+    }
+    try {
+        port = std::stoi(inner.substr(3, inner.size() - 4));
+    } catch (...) {
+        return false;
+    }
+    return port > 0;
+}
+
 std::string recvAll(int fd) {
     std::string out;
     char buf[4096];
@@ -153,6 +172,16 @@ protected:
                 ("sftpd-itest-" + std::to_string(getpid()) + "-" +
                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         std::filesystem::create_directories(home_);
+
+        // Keep the suite off the developer's real ~/.simple-sftpd state: both the
+        // user store and the virtual host store fall back to $HOME.
+        state_dir_ = home_ / "state";
+        std::filesystem::create_directories(state_dir_);
+        if (const char* previous = std::getenv("HOME")) {
+            saved_home_ = previous;
+            had_home_ = true;
+        }
+        setenv("HOME", state_dir_.c_str(), 1);
         hello_path_ = home_ / "hello.txt";
         {
             std::ofstream f(hello_path_);
@@ -169,6 +198,7 @@ protected:
         config_->transfer.use_mmap = false;
         config_->logging.log_to_console = false;
         config_->logging.log_level = "ERROR";
+        config_->security.user_file = (state_dir_ / "users.json").string();
 
         server_ = std::make_shared<FTPServer>(config_);
         ASSERT_TRUE(server_->start());
@@ -185,6 +215,11 @@ protected:
         if (server_) {
             server_->stop();
         }
+        if (had_home_) {
+            setenv("HOME", saved_home_.c_str(), 1);
+        } else {
+            unsetenv("HOME");
+        }
         std::error_code ec;
         std::filesystem::remove_all(home_, ec);
     }
@@ -199,6 +234,20 @@ protected:
     std::string cmd(const std::string& c) {
         EXPECT_TRUE(sendAll(ctrl_, c + "\r\n"));
         return readUntilFinal(ctrl_);
+    }
+
+    // Returns every line of a multi-line reply, not just the terminating one.
+    std::string cmdAll(const std::string& c) {
+        EXPECT_TRUE(sendAll(ctrl_, c + "\r\n"));
+        std::string all;
+        for (int i = 0; i < 64; ++i) {
+            std::string line = recvLine(ctrl_);
+            all += line + "\n";
+            if (line.empty() || (line.size() >= 4 && line[3] == ' ')) {
+                break;
+            }
+        }
+        return all;
     }
 
     bool login() {
@@ -223,7 +272,10 @@ protected:
     std::shared_ptr<FTPServerConfig> config_;
     std::shared_ptr<FTPServer> server_;
     std::filesystem::path home_;
+    std::filesystem::path state_dir_;
     std::filesystem::path hello_path_;
+    std::string saved_home_;
+    bool had_home_ = false;
     int port_ = 0;
     int ctrl_ = -1;
 };
@@ -434,6 +486,197 @@ TEST_F(FtpProtocolTest, AuthTlsSmoke) {
 #else
     GTEST_SKIP() << "SSL not enabled in this build";
 #endif
+}
+
+TEST_F(FtpProtocolTest, FeatAdvertisesRfc3659AndEpsv) {
+    connectControl();
+    const std::string feat = cmdAll("FEAT");
+    EXPECT_NE(feat.find(" EPSV"), std::string::npos) << feat;
+    EXPECT_NE(feat.find(" MDTM"), std::string::npos) << feat;
+    EXPECT_NE(feat.find(" MLST"), std::string::npos) << feat;
+    EXPECT_NE(feat.find(" UTF8"), std::string::npos) << feat;
+    EXPECT_NE(feat.find(" TVFS"), std::string::npos) << feat;
+}
+
+TEST_F(FtpProtocolTest, ExtendedPassiveModeRetr) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const auto epsv = cmd("EPSV");
+    ASSERT_EQ(epsv.substr(0, 3), "229") << epsv;
+    int dport = 0;
+    ASSERT_TRUE(parseEpsv(epsv, dport)) << epsv;
+
+    const int data = connectTcp("127.0.0.1", dport);
+    ASSERT_GE(data, 0);
+    EXPECT_TRUE(sendAll(ctrl_, "RETR hello.txt\r\n"));
+    ASSERT_EQ(recvLine(ctrl_).substr(0, 3), "150");
+    const std::string body = recvAll(data);
+    close(data);
+    ASSERT_EQ(recvLine(ctrl_).substr(0, 3), "226");
+    EXPECT_EQ(body, "hello-sftpd");
+}
+
+TEST_F(FtpProtocolTest, EpsvAllLocksOutActiveMode) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    ASSERT_EQ(cmd("EPSV ALL").substr(0, 3), "200");
+    EXPECT_EQ(cmd("PASV").substr(0, 3), "501");
+    EXPECT_EQ(cmd("PORT 127,0,0,1,4,28").substr(0, 3), "501");
+    EXPECT_EQ(cmd("EPSV").substr(0, 3), "229");
+}
+
+TEST_F(FtpProtocolTest, EpsvRejectsUnknownProtocol) {
+    connectControl();
+    ASSERT_TRUE(login());
+    EXPECT_EQ(cmd("EPSV 9").substr(0, 3), "522");
+}
+
+TEST_F(FtpProtocolTest, CdupWalksUpButNotOutOfHome) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    // The test user's home is /tmp and login() descends into the per-test dir,
+    // so one CDUP lands on the home boundary and the next must be refused.
+    EXPECT_EQ(cmd("CDUP").substr(0, 3), "250");
+    EXPECT_EQ(cmd("CDUP").substr(0, 3), "550");
+}
+
+TEST_F(FtpProtocolTest, PathTraversalIsRefused) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    // Relative escapes above the home directory.
+    EXPECT_EQ(cmd("CWD ../../etc").substr(0, 3), "550");
+    EXPECT_EQ(cmd("RETR ../../etc/passwd").substr(0, 3), "550");
+    EXPECT_EQ(cmd("MDTM ../../etc/passwd").substr(0, 3), "550");
+    EXPECT_EQ(cmd("MLST ../../etc/passwd").substr(0, 3), "550");
+    EXPECT_EQ(cmd("DELE ../../etc/passwd").substr(0, 3), "550");
+
+    // Absolute paths are virtual and rooted at the home directory, so a real
+    // system path must not resolve outside it.
+    EXPECT_EQ(cmd("RETR /etc/passwd").substr(0, 3), "550");
+    EXPECT_EQ(cmd("CWD /etc").substr(0, 3), "550");
+}
+
+TEST_F(FtpProtocolTest, MachineListingOverDataConnection) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const auto pasv = cmd("PASV");
+    ASSERT_EQ(pasv.substr(0, 3), "227");
+    std::string ip;
+    int dport = 0;
+    ASSERT_TRUE(parsePasv(pasv, ip, dport));
+
+    const int data = connectTcp("127.0.0.1", dport);
+    ASSERT_GE(data, 0);
+    EXPECT_TRUE(sendAll(ctrl_, "MLSD\r\n"));
+    ASSERT_EQ(recvLine(ctrl_).substr(0, 3), "150");
+    const std::string listing = recvAll(data);
+    close(data);
+    ASSERT_EQ(recvLine(ctrl_).substr(0, 3), "226");
+
+    EXPECT_NE(listing.find("hello.txt"), std::string::npos) << listing;
+    EXPECT_NE(listing.find("type=file;"), std::string::npos) << listing;
+    EXPECT_NE(listing.find("size=11;"), std::string::npos) << listing;
+    EXPECT_NE(listing.find("modify="), std::string::npos) << listing;
+    EXPECT_NE(listing.find("perm="), std::string::npos) << listing;
+}
+
+TEST_F(FtpProtocolTest, MachineListingSingleEntry) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const std::string mlst = cmdAll("MLST hello.txt");
+    EXPECT_NE(mlst.find("250-"), std::string::npos) << mlst;
+    EXPECT_NE(mlst.find("type=file;"), std::string::npos) << mlst;
+    EXPECT_NE(mlst.find("250 End"), std::string::npos) << mlst;
+
+    EXPECT_EQ(cmd("MLST no-such-file.txt").substr(0, 3), "550");
+}
+
+TEST_F(FtpProtocolTest, ModificationTime) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const auto mdtm = cmd("MDTM hello.txt");
+    ASSERT_EQ(mdtm.substr(0, 3), "213") << mdtm;
+    const std::string stamp = mdtm.substr(4);
+    EXPECT_EQ(stamp.size(), 14u) << mdtm;
+    EXPECT_TRUE(std::all_of(stamp.begin(), stamp.end(),
+                            [](unsigned char c) { return std::isdigit(c) != 0; })) << mdtm;
+
+    EXPECT_EQ(cmd("MDTM no-such-file.txt").substr(0, 3), "550");
+    EXPECT_EQ(cmd("MDTM").substr(0, 3), "501");
+}
+
+TEST_F(FtpProtocolTest, StatReportsServerAndPathStatus) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const std::string status = cmdAll("STAT");
+    EXPECT_NE(status.find("211-"), std::string::npos) << status;
+    EXPECT_NE(status.find("Logged in as: test"), std::string::npos) << status;
+    EXPECT_NE(status.find("211 End of status"), std::string::npos) << status;
+
+    const std::string file_status = cmdAll("STAT hello.txt");
+    EXPECT_NE(file_status.find("213-"), std::string::npos) << file_status;
+    EXPECT_NE(file_status.find("type=file;"), std::string::npos) << file_status;
+    EXPECT_NE(file_status.find("213 End of status"), std::string::npos) << file_status;
+}
+
+TEST_F(FtpProtocolTest, OptsUtf8) {
+    connectControl();
+    EXPECT_EQ(cmd("OPTS UTF8 ON").substr(0, 3), "200");
+    EXPECT_EQ(cmd("OPTS UTF8 OFF").substr(0, 3), "200");
+    EXPECT_EQ(cmd("OPTS NOSUCHOPTION").substr(0, 3), "501");
+}
+
+TEST_F(FtpProtocolTest, StoreUniqueGeneratesFreshName) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    const auto pasv = cmd("PASV");
+    ASSERT_EQ(pasv.substr(0, 3), "227");
+    std::string ip;
+    int dport = 0;
+    ASSERT_TRUE(parsePasv(pasv, ip, dport));
+
+    const int data = connectTcp("127.0.0.1", dport);
+    ASSERT_GE(data, 0);
+    EXPECT_TRUE(sendAll(ctrl_, "STOU unique.txt\r\n"));
+    const std::string opening = recvLine(ctrl_);
+    ASSERT_EQ(opening.substr(0, 3), "150") << opening;
+    EXPECT_NE(opening.find("FILE: unique.txt."), std::string::npos) << opening;
+    EXPECT_TRUE(sendAll(data, "unique-body"));
+    close(data);
+    ASSERT_EQ(recvLine(ctrl_).substr(0, 3), "226");
+
+    const std::string name = opening.substr(opening.find("FILE: ") + 6);
+    std::ifstream in(home_ / name);
+    ASSERT_TRUE(in.good()) << "expected STOU to create " << name;
+    const std::string got((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(got, "unique-body");
+}
+
+TEST_F(FtpProtocolTest, AborAlloHelpAndSite) {
+    connectControl();
+    ASSERT_TRUE(login());
+
+    EXPECT_EQ(cmd("ABOR").substr(0, 3), "226");
+    EXPECT_EQ(cmd("ALLO 1024").substr(0, 3), "202");
+
+    const std::string help = cmdAll("HELP");
+    EXPECT_NE(help.find("214-"), std::string::npos) << help;
+    EXPECT_NE(help.find("MLSD"), std::string::npos) << help;
+
+    const std::string site_help = cmdAll("SITE HELP");
+    EXPECT_NE(site_help.find("CHMOD"), std::string::npos) << site_help;
+
+    EXPECT_EQ(cmd("SITE CHMOD 640 hello.txt").substr(0, 3), "200");
+    EXPECT_EQ(cmd("SITE NOSUCH").substr(0, 3), "500");
 }
 
 TEST(PamAuthTest, SkippedUnlessLinuxPam) {
