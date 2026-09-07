@@ -1,0 +1,5 @@
+d /var/lib/simple-sftpd 0750 simple-sftpd simple-sftpd -
+d /var/log/simple-sftpd 0750 simple-sftpd simple-sftpd -
+d /etc/simple-sftpd 0750 root simple-sftpd -
+d /etc/simple-sftpd/tls 0750 root simple-sftpd -
+d /var/ftp 0755 simple-sftpd simple-sftpd -

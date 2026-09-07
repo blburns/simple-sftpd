@@ -4,11 +4,14 @@
 #
 # chkconfig: 2345 85 15
 # description: Simple Secure FTP Daemon (simple-sftpd)
+# processname: simple-sftpd
+# pidfile: /var/run/simple-sftpd.pid
+# config: /etc/simple-sftpd/simple-sftpd.conf
 
 ### BEGIN INIT INFO
 # Provides:          simple-sftpd
-# Required-Start:    $network $remote_fs
-# Required-Stop:     $network $remote_fs
+# Required-Start:    $network $remote_fs $syslog
+# Required-Stop:     $network $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Simple Secure FTP Daemon
@@ -19,17 +22,35 @@ NAME=simple-sftpd
 DAEMON=/usr/bin/simple-sftpd
 CONFIG=/etc/simple-sftpd/simple-sftpd.conf
 PIDFILE=/var/run/simple-sftpd.pid
+LOCKFILE=/var/lock/subsys/simple-sftpd
+SERVICE_USER=simple-sftpd
+SERVICE_GROUP=simple-sftpd
+RUN_DIRS="/var/ftp /var/log/simple-sftpd /var/lib/simple-sftpd"
 
 [ -x "$DAEMON" ] || exit 0
 
+LSB=0
+REDHAT=0
 if [ -f /lib/lsb/init-functions ]; then
     . /lib/lsb/init-functions
+    LSB=1
 elif [ -f /etc/rc.d/init.d/functions ]; then
     . /etc/rc.d/init.d/functions
+    REDHAT=1
 fi
 
+ensure_runtime_dirs() {
+    for dir in $RUN_DIRS; do
+        mkdir -p "$dir"
+        chown "$SERVICE_USER:$SERVICE_GROUP" "$dir" 2>/dev/null || true
+    done
+}
+
 is_running() {
-    [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        return 0
+    fi
+    "$DAEMON" status --config "$CONFIG" >/dev/null 2>&1
 }
 
 start() {
@@ -43,22 +64,54 @@ start() {
         return 1
     fi
 
-    echo -n "Starting $NAME: "
+    ensure_runtime_dirs
+
+    if [ "$LSB" -eq 1 ]; then
+        log_daemon_msg "Starting $NAME"
+    else
+        echo -n "Starting $NAME: "
+    fi
+
     if "$DAEMON" --daemon start --config "$CONFIG"; then
-        echo "OK"
+        [ "$REDHAT" -eq 1 ] && touch "$LOCKFILE"
+        if [ "$LSB" -eq 1 ]; then
+            log_end_msg 0
+        else
+            echo "OK"
+        fi
         return 0
     fi
-    echo "FAILED"
+
+    if [ "$LSB" -eq 1 ]; then
+        log_end_msg 1
+    else
+        echo "FAILED"
+    fi
     return 1
 }
 
 stop() {
-    echo -n "Stopping $NAME: "
+    if [ "$LSB" -eq 1 ]; then
+        log_daemon_msg "Stopping $NAME"
+    else
+        echo -n "Stopping $NAME: "
+    fi
+
     if "$DAEMON" stop; then
-        echo "OK"
+        rm -f "$LOCKFILE" "$PIDFILE"
+        if [ "$LSB" -eq 1 ]; then
+            log_end_msg 0
+        else
+            echo "OK"
+        fi
         return 0
     fi
-    echo "FAILED"
+
+    if [ "$LSB" -eq 1 ]; then
+        log_end_msg 1
+    else
+        echo "FAILED"
+    fi
     return 1
 }
 
@@ -69,16 +122,35 @@ restart() {
 }
 
 reload() {
-    echo -n "Reloading $NAME: "
+    if [ "$LSB" -eq 1 ]; then
+        log_daemon_msg "Reloading $NAME"
+    else
+        echo -n "Reloading $NAME: "
+    fi
+
     if "$DAEMON" reload; then
-        echo "OK"
+        if [ "$LSB" -eq 1 ]; then
+            log_end_msg 0
+        else
+            echo "OK"
+        fi
         return 0
     fi
-    echo "FAILED"
+
+    if [ "$LSB" -eq 1 ]; then
+        log_end_msg 1
+    else
+        echo "FAILED"
+    fi
     return 1
 }
 
 status() {
+    if [ "$LSB" -eq 1 ]; then
+        status_of_proc -p "$PIDFILE" "$DAEMON" "$NAME" && return 0
+        "$DAEMON" status --config "$CONFIG"
+        return $?
+    fi
     "$DAEMON" status --config "$CONFIG"
 }
 
@@ -90,7 +162,7 @@ case "$1" in
     start)   start ;;
     stop)    stop ;;
     restart) restart ;;
-    reload)  reload ;;
+    reload|force-reload) reload ;;
     status)  status ;;
     configtest|test-config) configtest ;;
     *)

@@ -42,6 +42,8 @@ public:
     bool start();
     void stop();
     bool isRunning() const;
+    int listenPort() const { return listen_port_; }
+    std::shared_ptr<FTPVirtualHostManager> virtualHostManager() const { return virtual_host_manager_; }
 
 private:
     void serverLoop();
@@ -61,6 +63,7 @@ private:
     std::atomic<bool> running_;
     std::thread server_thread_;
     int server_socket_;
+    int listen_port_ = 0;
 };
 
 } // namespace simple_sftpd

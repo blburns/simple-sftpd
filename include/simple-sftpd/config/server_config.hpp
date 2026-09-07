@@ -73,6 +73,7 @@ struct RateLimitConfig {
 struct TransferConfig {
     bool use_sendfile = false;  // use sendfile() for RETR when available
     bool use_mmap = false;      // use mmap for RETR when sendfile not used
+    bool enable_compression = false;  // allow MODE Z on the wire
     size_t buffer_size = 32768;
 };
 

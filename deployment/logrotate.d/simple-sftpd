@@ -1,0 +1,11 @@
+/var/log/simple-sftpd/*.log {
+    daily
+    missingok
+    rotate 52
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+    create 640 simple-sftpd simple-sftpd
+    su simple-sftpd simple-sftpd
+}

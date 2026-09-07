@@ -23,6 +23,7 @@
 #endif
 #endif
 #include <cstring>
+#include <memory>
 
 namespace simple_sftpd {
 
@@ -208,6 +209,83 @@ std::vector<uint8_t> Compression::decompressBzip2(const std::vector<uint8_t>& da
 #else
     logger_->warn("Bzip2 decompression not available - compression support disabled");
     return data;
+#endif
+}
+
+struct ZlibStream::Impl {
+#ifdef ENABLE_COMPRESSION
+    z_stream stream{};
+#endif
+    ZlibStream::Mode mode = ZlibStream::Mode::Deflate;
+    bool valid = false;
+};
+
+ZlibStream::ZlibStream(Mode mode) : impl_(std::make_unique<Impl>()) {
+    impl_->mode = mode;
+#ifdef ENABLE_COMPRESSION
+    std::memset(&impl_->stream, 0, sizeof(impl_->stream));
+    int ret = (mode == Mode::Deflate)
+        ? deflateInit(&impl_->stream, Z_DEFAULT_COMPRESSION)
+        : inflateInit(&impl_->stream);
+    impl_->valid = (ret == Z_OK);
+#else
+    (void)mode;
+    impl_->valid = false;
+#endif
+}
+
+ZlibStream::~ZlibStream() {
+#ifdef ENABLE_COMPRESSION
+    if (impl_ && impl_->valid) {
+        if (impl_->mode == Mode::Deflate) {
+            deflateEnd(&impl_->stream);
+        } else {
+            inflateEnd(&impl_->stream);
+        }
+    }
+#endif
+}
+
+bool ZlibStream::valid() const {
+    return impl_ && impl_->valid;
+}
+
+bool ZlibStream::process(const uint8_t* input, size_t input_len, std::vector<uint8_t>& output, bool finish) {
+    output.clear();
+#ifdef ENABLE_COMPRESSION
+    if (!impl_ || !impl_->valid) {
+        return false;
+    }
+    static const uint8_t kEmpty = 0;
+    impl_->stream.next_in = const_cast<Bytef*>(input != nullptr ? input : &kEmpty);
+    impl_->stream.avail_in = static_cast<uInt>(input_len);
+    const int flush = finish ? Z_FINISH : Z_NO_FLUSH;
+    uint8_t buf[16384];
+    int ret = Z_OK;
+    do {
+        impl_->stream.next_out = buf;
+        impl_->stream.avail_out = sizeof(buf);
+        ret = (impl_->mode == Mode::Deflate)
+            ? deflate(&impl_->stream, flush)
+            : inflate(&impl_->stream, flush);
+        if (ret == Z_STREAM_ERROR || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR) {
+            return false;
+        }
+        const size_t have = sizeof(buf) - impl_->stream.avail_out;
+        output.insert(output.end(), buf, buf + have);
+        if (ret == Z_STREAM_END) {
+            break;
+        }
+        if (ret == Z_BUF_ERROR && impl_->stream.avail_in == 0 && !finish) {
+            break;
+        }
+    } while (impl_->stream.avail_out == 0 || (finish && ret != Z_STREAM_END));
+    return ret == Z_OK || ret == Z_STREAM_END || ret == Z_BUF_ERROR;
+#else
+    (void)input;
+    (void)input_len;
+    (void)finish;
+    return false;
 #endif
 }
 

@@ -102,7 +102,12 @@ std::vector<std::shared_ptr<FTPConnection>> FTPConnectionManager::getConnections
 
 void FTPConnectionManager::cleanupLoop() {
     while (running_) {
-        std::this_thread::sleep_for(cleanup_interval_);
+        for (int i = 0; i < 20 && running_; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!running_) {
+            break;
+        }
         
         // Clean up inactive connections
         std::lock_guard<std::mutex> lock(connections_mutex_);
@@ -169,7 +174,12 @@ void FTPConnectionManager::setPoolSize(size_t pool_size) {
 
 void FTPConnectionManager::poolMaintenanceLoop() {
     while (running_) {
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+        for (int i = 0; i < 20 && running_; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!running_) {
+            break;
+        }
         
         // Clean up inactive connections from pool
         std::lock_guard<std::mutex> lock(pool_mutex_);

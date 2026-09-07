@@ -133,8 +133,10 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 connection.bind_port = std::stoi(value);
             } else if (key == "max_connections") {
                 connection.max_connections = std::stoi(value);
-            } else if (key == "timeout_seconds" || key == "connection_timeout") {
+            } else             if (key == "timeout_seconds" || key == "connection_timeout") {
                 connection.timeout_seconds = std::stoi(value);
+            } else if (key == "enable_compression") {
+                transfer.enable_compression = (value == "true" || value == "1");
             }
         } else if (current_section == "logging") {
             if (key == "log_file") {
@@ -201,6 +203,8 @@ bool FTPServerConfig::loadFromINI(const std::string& filename) {
                 transfer.use_mmap = (value == "true" || value == "1");
             } else if (key == "buffer_size") {
                 transfer.buffer_size = static_cast<size_t>(std::stoul(value));
+            } else if (key == "enable_compression") {
+                transfer.enable_compression = (value == "true" || value == "1");
             }
         }
     }
@@ -288,6 +292,7 @@ bool FTPServerConfig::loadFromJSON(const std::string& filename) {
         if (tr.isMember("use_sendfile")) transfer.use_sendfile = tr["use_sendfile"].asBool();
         if (tr.isMember("use_mmap")) transfer.use_mmap = tr["use_mmap"].asBool();
         if (tr.isMember("buffer_size")) transfer.buffer_size = static_cast<size_t>(tr["buffer_size"].asUInt());
+        if (tr.isMember("enable_compression")) transfer.enable_compression = tr["enable_compression"].asBool();
     }
     
     return true;
@@ -435,6 +440,8 @@ bool FTPServerConfig::loadFromYAML(const std::string& filename) {
                 transfer.use_mmap = (value == "true" || value == "1");
             } else if (key == "buffer_size") {
                 transfer.buffer_size = static_cast<size_t>(std::stoul(value));
+            } else if (key == "enable_compression") {
+                transfer.enable_compression = (value == "true" || value == "1");
             }
         }
     }
@@ -447,7 +454,7 @@ bool FTPServerConfig::validate() {
     clearErrors();
     
     // Basic validation
-    if (connection.bind_port <= 0 || connection.bind_port > 65535) {
+    if (connection.bind_port < 0 || connection.bind_port > 65535) {
         addError("Invalid bind port: " + std::to_string(connection.bind_port));
     }
     

@@ -3,8 +3,11 @@
 # Copyright 2024 SimpleDaemons
 
 cmake_minimum_required(VERSION 3.16)
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
+endif()
 project(simple-sftpd
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "Simple Secure FTP Daemon - a secure, configurable FTP server"
     LANGUAGES CXX)
 
@@ -26,14 +29,18 @@ endif()
 include(GNUInstallDirs)
 
 # Linux packages follow FHS: /usr/bin, /etc/simple-sftpd, systemd under /usr/lib
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-        set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install prefix" FORCE)
+        set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Install prefix")
     endif()
-    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "System config directory" FORCE)
 endif()
 
-set(SIMPLE_SFTPD_CONFIG_DIR "${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}")
+# FHS /etc, not ${prefix}/etc (CMAKE_INSTALL_SYSCONFDIR is relative).
+if(WIN32)
+    set(SIMPLE_SFTPD_CONFIG_DIR "${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}")
+else()
+    set(SIMPLE_SFTPD_CONFIG_DIR "/etc/${PROJECT_NAME}")
+endif()
 # Build options
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(ENABLE_TESTS "Enable tests" ON)
@@ -78,6 +85,17 @@ endif()
 find_package(Threads REQUIRED)
 
 if(ENABLE_SSL)
+    if(APPLE)
+        foreach(_openssl_hint IN ITEMS
+                "/opt/homebrew/opt/openssl@3"
+                "/opt/homebrew/opt/openssl"
+                "/usr/local/opt/openssl@3"
+                "/usr/local/opt/openssl")
+            if(EXISTS "${_openssl_hint}")
+                list(PREPEND CMAKE_PREFIX_PATH "${_openssl_hint}")
+            endif()
+        endforeach()
+    endif()
     find_package(OpenSSL REQUIRED)
     add_definitions(-DSIMPLE_SFTPD_SSL_ENABLED)
 endif()
@@ -216,44 +234,74 @@ if(ENABLE_STATIC_LINKING)
 endif()
 
 # Install targets
-install(TARGETS ${PROJECT_NAME}
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-)
-
-install(DIRECTORY include/
-    DESTINATION include
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-)
-
-# Install configuration files under /etc/simple-sftpd (Linux) or ${prefix}/etc/... (macOS/FreeBSD)
-install(FILES config/production/simple-sftpd.conf
-    DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}
-    RENAME simple-sftpd.conf
-)
-install(DIRECTORY config/
-    DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}
-    FILES_MATCHING
-        PATTERN "*.conf"
-        PATTERN "*.example"
-        PATTERN "*.json"
-        PATTERN "*.yml"
-        PATTERN "*.yaml"
-        PATTERN "README.md" EXCLUDE
-)
-
-# Install service files (systemd + SysV init.d on Linux)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    install(FILES deployment/systemd/${PROJECT_NAME}.service
-        DESTINATION /usr/lib/systemd/system
+if(APPLE)
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
     )
-    install(PROGRAMS deployment/init.d/${PROJECT_NAME}
-        DESTINATION /etc/init.d
+    install(DIRECTORY include/
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     )
-elseif(APPLE)
-    install(FILES deployment/launchd/com.${PROJECT_NAME}.${PROJECT_NAME}.plist
-        DESTINATION Library/LaunchDaemons
+    install(FILES deployment/launchd/com.simpledaemons.${PROJECT_NAME}.plist
+        DESTINATION /Library/LaunchDaemons
+    )
+    install(DIRECTORY DESTINATION /var/lib/${PROJECT_NAME})
+    install(DIRECTORY DESTINATION /var/log/${PROJECT_NAME})
+    install(DIRECTORY DESTINATION /var/ftp)
+else()
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+    install(DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
+    install(DIRECTORY DESTINATION /var/lib/${PROJECT_NAME})
+    install(DIRECTORY DESTINATION /var/log/${PROJECT_NAME})
+    install(DIRECTORY DESTINATION /var/ftp)
+    if(UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+        install(FILES deployment/systemd/${PROJECT_NAME}.service
+            DESTINATION lib/systemd/system
+        )
+        install(FILES deployment/systemd/${PROJECT_NAME}.sysusers
+            DESTINATION lib/sysusers.d
+            RENAME ${PROJECT_NAME}.conf
+        )
+        install(FILES deployment/systemd/${PROJECT_NAME}.tmpfiles
+            DESTINATION lib/tmpfiles.d
+            RENAME ${PROJECT_NAME}.conf
+        )
+        install(FILES deployment/logrotate.d/${PROJECT_NAME}
+            DESTINATION /etc/logrotate.d
+        )
+        install(PROGRAMS deployment/init.d/${PROJECT_NAME}
+            DESTINATION /etc/init.d
+        )
+    endif()
+endif()
+
+if(NOT WIN32)
+    install(FILES config/production/simple-sftpd.conf
+        DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}/templates
+        RENAME production.conf
+    )
+    install(DIRECTORY config/simple config/advanced config/production
+        DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}/examples
+    )
+    install(FILES config/simple-sftpd.conf.example
+        DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}/examples
+    )
+    install(DIRECTORY DESTINATION ${SIMPLE_SFTPD_CONFIG_DIR}/tls)
+    install(FILES LICENSE README.md CHANGELOG.md
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+    )
+    install(DIRECTORY docs/
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs
+        FILES_MATCHING PATTERN "*.md"
     )
 endif()
 
@@ -267,206 +315,146 @@ endif()
 
 # Package generation
 if(ENABLE_PACKAGING)
-    # Package information
     set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
     set(CPACK_PACKAGE_VENDOR "SimpleDaemons")
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
     set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
     set(CPACK_PACKAGE_CONTACT "info@simpledaemons.com")
     set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/simpledaemons/${PROJECT_NAME}")
-    
-    # Package files (productbuild requires .txt/.html resource extensions on macOS)
+
     if(APPLE)
-        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/cpack")
-        configure_file("${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-            "${CMAKE_BINARY_DIR}/cpack/LICENSE.txt" COPYONLY)
-        set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/cpack/LICENSE.txt")
-        set(CPACK_RESOURCE_FILE_README
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/readme.html")
-        set(CPACK_RESOURCE_FILE_WELCOME
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/welcome.html")
+        set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE.txt")
+        set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/readme.html")
+        set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_CURRENT_SOURCE_DIR}/packaging/assets/welcome.html")
     else()
         set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
         set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
     endif()
-    
-    # Platform-specific package settings
+
     if(WIN32)
-        # Windows MSI and ZIP packages
-        set(CPACK_GENERATOR "WIX;ZIP")
-        
-        # WIX (MSI) settings
-        set(CPACK_WIX_PRODUCT_GUID "12345678-1234-1234-1234-123456789012")
-        set(CPACK_WIX_UPGRADE_GUID "87654321-4321-4321-4321-210987654321")
-        set(CPACK_WIX_PROPERTY_ARPPRODUCTICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.ico")
+        set(CPACK_GENERATOR "WIX;ZIP;NSIS")
+        set(CPACK_WIX_PRODUCT_GUID "c8e2a14f-6d93-4b71-9e5a-1f7c3d8b0a24")
+        set(CPACK_WIX_UPGRADE_GUID "e5b91c07-2a48-4d16-8f3e-9a0c6b7d4e12")
         set(CPACK_WIX_PROPERTY_ARPHELPLINK "https://github.com/simpledaemons/${PROJECT_NAME}")
         set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://github.com/simpledaemons/${PROJECT_NAME}")
         set(CPACK_WIX_PROPERTY_ARPNOREPAIR "1")
         set(CPACK_WIX_PROPERTY_ARPNOMODIFY "1")
-        
-        # ZIP package settings
         set(CPACK_ZIP_COMPONENT_INSTALL ON)
-        
+        set(CPACK_NSIS_DISPLAY_NAME "Simple Secure FTP Daemon")
+        set(CPACK_NSIS_PACKAGE_NAME "simple-sftpd")
+        set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
+            "CreateDirectory '$COMMON_APPDATA\\\\simple-sftpd'\\nCreateDirectory '$COMMON_APPDATA\\\\simple-sftpd\\\\logs'\\nCreateDirectory '$COMMON_APPDATA\\\\simple-sftpd\\\\tls'")
+        set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
+            "nsExec::ExecToLog 'sc stop simple-sftpd'\\nnsExec::ExecToLog 'sc delete simple-sftpd'")
     elseif(APPLE)
-        # macOS DMG and PKG packages
         set(CPACK_GENERATOR "DragNDrop;productbuild")
-
-        # DMG settings (optional branding assets under assets/)
+        set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
+        set(CPACK_SET_DESTDIR TRUE)
+        set(CPACK_PRODUCTBUILD_DOMAINS TRUE)
+        set(CPACK_PRODUCTBUILD_DOMAINS_ANYWHERE TRUE)
+        set(CPACK_PRODUCTBUILD_DOMAINS_ROOT TRUE)
+        set(CPACK_PACKAGE_RELOCATABLE FALSE)
         set(CPACK_DMG_VOLUME_NAME "${PROJECT_NAME}")
         set(CPACK_DMG_FORMAT "UDBZ")
-        set(_dmg_background "${CMAKE_CURRENT_SOURCE_DIR}/assets/dmg_background.png")
-        set(_dmg_dsstore "${CMAKE_CURRENT_SOURCE_DIR}/assets/DS_Store")
-        if(EXISTS "${_dmg_background}")
-            set(CPACK_DMG_BACKGROUND_IMAGE "${_dmg_background}")
-        endif()
-        if(EXISTS "${_dmg_dsstore}")
-            set(CPACK_DMG_DS_STORE "${_dmg_dsstore}")
-        endif()
-
-        # PKG settings
         set(CPACK_PRODUCTBUILD_IDENTIFIER "com.simpledaemons.${PROJECT_NAME}")
         set(CPACK_PRODUCTBUILD_PACKAGE_NAME "${PROJECT_NAME}")
+        list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+        set(CPACK_POSTFLIGHT_Unspecified_SCRIPT
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/pkg/scripts/postinstall")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+        set(CPACK_GENERATOR "FREEBSD")
+        set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+        set(CPACK_SET_DESTDIR TRUE)
+        set(CPACK_FREEBSD_PACKAGE_MAINTAINER "SimpleDaemons <info@simpledaemons.com>")
+        set(CPACK_FREEBSD_PACKAGE_ORIGIN "net/${PROJECT_NAME}")
+        set(CPACK_FREEBSD_PACKAGE_LICENSE "APACHE20")
+        if(ENABLE_STATIC_LINKING)
+            set(CPACK_FREEBSD_PACKAGE_RUNTIME_DEPENDS "")
+        else()
+            set(CPACK_FREEBSD_PACKAGE_RUNTIME_DEPENDS "openssl")
+        endif()
+    else()
+        set(CPACK_GENERATOR "DEB;RPM")
+        set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+        set(CPACK_SET_DESTDIR TRUE)
+        set(CPACK_DEBIAN_PACKAGE_MAINTAINER "SimpleDaemons <info@simpledaemons.com>")
+        set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+        set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+        if(ENABLE_STATIC_LINKING)
+            set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+        else()
+            set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3 (>= 3.0.0)")
+        endif()
+        set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "systemd")
+        set(CPACK_DEBIAN_PACKAGE_SUGGESTS "logrotate")
+        set(CPACK_DEBIAN_PACKAGE_CONFLICTS "")
+        set(CPACK_DEBIAN_PACKAGE_PROVIDES "${PROJECT_NAME}")
+        set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/simpledaemons/${PROJECT_NAME}")
+        set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${PROJECT_DESCRIPTION}")
+        set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/postinst"
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/prerm"
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/postrm"
+        )
+        set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
+        set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
+        set(CPACK_RPM_PACKAGE_URL "https://github.com/simpledaemons/${PROJECT_NAME}")
+        set(CPACK_RPM_PACKAGE_DESCRIPTION "${PROJECT_DESCRIPTION}")
+        if(ENABLE_STATIC_LINKING)
+            set(CPACK_RPM_PACKAGE_REQUIRES "")
+        else()
+            set(CPACK_RPM_PACKAGE_REQUIRES "openssl-libs")
+        endif()
+        set(CPACK_RPM_PACKAGE_SUGGESTS "systemd")
+        set(CPACK_RPM_PACKAGE_PROVIDES "${PROJECT_NAME}")
+        set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/preinstall.sh")
+        set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postinstall.sh")
+        set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/preuninstall.sh")
+        set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postuninstall.sh")
+    endif()
 
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+        set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+        set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
+        set(PACKAGE_ARCH "amd64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+        set(CPACK_RPM_PACKAGE_ARCHITECTURE "aarch64")
+        set(PACKAGE_ARCH "arm64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "armv7l")
+        set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
+        set(CPACK_RPM_PACKAGE_ARCHITECTURE "armv7hl")
+        set(PACKAGE_ARCH "armhf")
+    else()
+        set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+
+    if(APPLE)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
             set(PLATFORM_ID "macos-apple")
         else()
             set(PLATFORM_ID "macos-intel")
         endif()
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-        # FreeBSD binary tarball (install tree)
-        set(CPACK_GENERATOR "TGZ")
         set(PLATFORM_ID "freebsd")
-
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64|x86_64")
-            set(PACKAGE_ARCH "amd64")
-        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-            set(PACKAGE_ARCH "arm64")
-        else()
-            set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-        endif()
-
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        set(CPACK_FREEBSD_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
     elseif(UNIX)
-        # Linux DEB and RPM packages
-        set(CPACK_GENERATOR "DEB;RPM")
-        
-        # DEB package settings
-        set(CPACK_DEBIAN_PACKAGE_MAINTAINER "SimpleDaemons <info@simpledaemons.com>")
-        set(CPACK_DEBIAN_PACKAGE_SECTION "net")
-        set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-        set(CPACK_DEBIAN_PACKAGE_DEPENDS "libssl3 | libssl1.1, libjsoncpp26 | libjsoncpp25 | libjsoncpp24")
-        set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "systemd")
-        set(CPACK_DEBIAN_PACKAGE_SUGGESTS "logrotate")
-        set(CPACK_DEBIAN_PACKAGE_CONFLICTS "ntp")
-        set(CPACK_DEBIAN_PACKAGE_PROVIDES "${PROJECT_NAME}")
-        set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/simpledaemons/${PROJECT_NAME}")
-        set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${PROJECT_DESCRIPTION}")
-        set(CPACK_DEBIAN_PACKAGE_LONG_DESCRIPTION "${PROJECT_DESCRIPTION}")
-        set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/postinst"
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/deb/prerm"
-        )
-        
-        # RPM package settings
-        set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")
-        set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
-        set(CPACK_RPM_PACKAGE_URL "https://github.com/simpledaemons/${PROJECT_NAME}")
-        set(CPACK_RPM_PACKAGE_DESCRIPTION "${PROJECT_DESCRIPTION}")
-        set(CPACK_RPM_PACKAGE_REQUIRES "openssl-libs, jsoncpp")
-        set(CPACK_RPM_PACKAGE_SUGGESTS "systemd")
-        set(CPACK_RPM_PACKAGE_CONFLICTS "ntp")
-        set(CPACK_RPM_PACKAGE_PROVIDES "${PROJECT_NAME}")
-        set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postinstall.sh")
-        set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
-            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/rpm/postuninstall.sh")
-        
-        # Set package architecture and determine architecture string
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
-            set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
-            set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
-            set(PACKAGE_ARCH "amd64")
-        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-            set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
-            set(CPACK_RPM_PACKAGE_ARCHITECTURE "aarch64")
-            set(PACKAGE_ARCH "arm64")
-        elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "armv7l")
-            set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
-            set(CPACK_RPM_PACKAGE_ARCHITECTURE "armv7hl")
-            set(PACKAGE_ARCH "armhf")
-        else()
-            set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-        endif()
-        
-        # Determine distribution/platform identifier for package naming
-        if(APPLE)
-            # Detect Intel vs Apple Silicon for macOS
-            if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
-                set(PLATFORM_ID "macos-apple")
-            else()
-                set(PLATFORM_ID "macos-intel")
-            endif()
-        else()
-            # Try to detect Linux distribution for proper naming
-            set(PLATFORM_ID "linux-generic")  # Default for RPM-based
-            if(EXISTS "/etc/os-release")
-                file(READ "/etc/os-release" OS_RELEASE)
-                if(OS_RELEASE MATCHES "ID=([^\n]+)")
-                    string(REGEX REPLACE ".*ID=([^\n]+).*" "\\1" DISTRO_ID "${OS_RELEASE}")
-                    string(STRIP "${DISTRO_ID}" DISTRO_ID)
-                    string(TOLOWER "${DISTRO_ID}" DISTRO_ID)
-                    string(REPLACE "\"" "" DISTRO_ID "${DISTRO_ID}")
-                    
-                    # Map common distro IDs to package names
-                    if(DISTRO_ID MATCHES "debian|ubuntu")
-                        set(PLATFORM_ID "linux-debian")
-                    elseif(DISTRO_ID MATCHES "rhel|centos|fedora|rocky|almalinux|ol")
-                        set(PLATFORM_ID "linux-rhel")
-                    endif()
-                endif()
-            endif()
-        endif()
-    endif()
-    
-    # Set package file names with standardized format: {project}-{version}-{product}-{platform}-{distro}-{arch}.{ext}
-    # Format matches: simple-sftpd-0.2.1-production-linux-debian-amd64.deb
-    if(APPLE)
-        # macOS packages: simple-sftpd-0.2.1-production-macos-intel.dmg / .pkg
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}")
-    elseif(UNIX)
-        # Linux/FreeBSD packages: simple-sftpd-0.3.0-production-linux-debian-amd64.deb / .rpm
-        # FreeBSD TGZ: simple-sftpd-0.3.0-production-freebsd-amd64.tar.gz
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
-        
-        if(NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-            # Override DEB and RPM file names to match our format
-            set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
-            set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_ID}-${PACKAGE_ARCH}")
-        endif()
+        set(PLATFORM_ID "linux-generic")
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}")
+        set(CPACK_DEBIAN_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}.deb")
+        set(CPACK_RPM_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_ID}-${PACKAGE_ARCH}.rpm")
     else()
-        # Windows and others
-        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PRODUCT_VERSION_NAME}-${PLATFORM_NAME}-${PACKAGE_ARCH}")
+        set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PLATFORM_NAME}-${PACKAGE_ARCH}")
     endif()
+
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "${PROJECT_NAME}")
-    
-    # Component installation
-    set(CPACK_COMPONENT_APPLICATIONS_DISPLAY_NAME "Application")
-    set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION "The ${PROJECT_NAME} executable and related files")
-    
-    set(CPACK_COMPONENT_DEVELOPMENT_DISPLAY_NAME "Development")
-    set(CPACK_COMPONENT_DEVELOPMENT_DESCRIPTION "Header files for developing with ${PROJECT_NAME}")
-    
-    set(CPACK_COMPONENT_CONFIG_DISPLAY_NAME "Configuration")
-    set(CPACK_COMPONENT_CONFIG_DESCRIPTION "Configuration files and examples")
-    
-    set(CPACK_COMPONENT_SERVICE_DISPLAY_NAME "Service")
-    set(CPACK_COMPONENT_SERVICE_DESCRIPTION "System service files")
-    
-    # Set component dependencies
-    set(CPACK_COMPONENT_DEVELOPMENT_DEPENDS applications)
-    set(CPACK_COMPONENT_CONFIG_DEPENDS applications)
-    set(CPACK_COMPONENT_SERVICE_DEPENDS applications)
-    
-    # Source package generation
     set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
     set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-src")
     set(CPACK_SOURCE_IGNORE_FILES
@@ -486,24 +474,10 @@ if(ENABLE_PACKAGING)
         "/_CPack_Packages/"
         "/.DS_Store"
         "/Thumbs.db"
-        "*.o"
-        "*.a"
-        "*.so"
-        "*.dylib"
-        "*.dll"
-        "*.exe"
-        "*.pdb"
-        "*.ilk"
-        "*.exp"
-        "*.lib"
     )
-
     include(CPack)
 endif()
 
-# Print configuration summary
-message(STATUS "")
-message(STATUS "Configuration Summary:")
 message(STATUS "")
 message(STATUS "Configuration Summary:")
 message(STATUS "  Project: ${PROJECT_NAME} ${PROJECT_VERSION}")
@@ -516,4 +490,5 @@ message(STATUS "  Tests enabled: ${ENABLE_TESTS}")
 message(STATUS "  Packaging enabled: ${ENABLE_PACKAGING}")
 message(STATUS "  SSL support: ${ENABLE_SSL}")
 message(STATUS "  JSON support: ${ENABLE_JSON}")
+message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "")

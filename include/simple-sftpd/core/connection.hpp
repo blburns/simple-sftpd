@@ -60,6 +60,8 @@ private:
     void handleLIST(const std::string& path);
     void handlePASV();
     void handlePORT(const std::string& address_port);
+    void handleEPRT(const std::string& endpoint);
+    void handleMODE(const std::string& mode);
     void handleTYPE(const std::string& type);
     void handleSIZE(const std::string& filename);
     void handleRETR(const std::string& filename);
@@ -96,6 +98,8 @@ private:
     
     // Security
     void applyChroot();
+    bool compressionEnabled() const;
+    bool transferModeZ() const { return transfer_mode_ == "Z"; }
 
     int socket_;
     std::shared_ptr<Logger> logger_;
@@ -124,6 +128,7 @@ private:
     int data_socket_;
     std::mutex data_socket_mutex_;
     std::string transfer_type_;  // "A" for ASCII, "I" for binary
+    std::string transfer_mode_;  // "S" stream, "Z" compressed (MODE Z)
     std::string protection_level_;  // "C" for clear, "P" for private (encrypted)
     
     // Active mode state

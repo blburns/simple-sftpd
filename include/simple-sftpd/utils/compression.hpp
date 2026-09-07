@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <cstddef>
+#include <cstdint>
 
 namespace simple_sftpd {
 
@@ -70,6 +72,34 @@ private:
     std::vector<uint8_t> decompressGzip(const std::vector<uint8_t>& data);
     std::vector<uint8_t> compressBzip2(const std::vector<uint8_t>& data);
     std::vector<uint8_t> decompressBzip2(const std::vector<uint8_t>& data);
+};
+
+/**
+ * Streaming zlib (RFC 1950) for FTP MODE Z. MODE Z uses the zlib wrapper, not gzip.
+ */
+class ZlibStream {
+public:
+    enum class Mode {
+        Deflate,
+        Inflate
+    };
+
+    explicit ZlibStream(Mode mode);
+    ~ZlibStream();
+
+    ZlibStream(const ZlibStream&) = delete;
+    ZlibStream& operator=(const ZlibStream&) = delete;
+
+    bool valid() const;
+    /**
+     * Consume input and append compressed/decompressed bytes to output.
+     * Pass finish=true after the last input chunk (input may be empty).
+     */
+    bool process(const uint8_t* input, size_t input_len, std::vector<uint8_t>& output, bool finish);
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace simple_sftpd

@@ -14,6 +14,7 @@ if(NOT GTest_FOUND)
     )
     # For Windows: Prevent overriding the parent project's compiler/linker settings
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
     
     # Create imported targets if they don't exist
@@ -58,6 +59,7 @@ set(TEST_SOURCES
     unit/test_compression.cpp
     integration/test_ftp_connection.cpp
     integration/test_ftp_server.cpp
+    integration/test_ftp_protocol.cpp
     main.cpp
 )
 

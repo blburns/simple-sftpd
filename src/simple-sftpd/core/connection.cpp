@@ -25,6 +25,7 @@
 #include "simple-sftpd/virtual_host/virtual_host_manager.hpp"
 #include "simple-sftpd/virtual_host/virtual_host.hpp"
 #include "simple-sftpd/core/session_tracker.hpp"
+#include "simple-sftpd/utils/compression.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -79,7 +80,8 @@ FTPConnection::FTPConnection(int socket, std::shared_ptr<Logger> logger, std::sh
     : socket_(socket), logger_(logger), config_(config), user_manager_(),
       active_(false), authenticated_(false), current_user_(nullptr), current_directory_("/"),
       ssl_enabled_(false), ssl_active_(false), ssl_(nullptr), data_ssl_(nullptr),
-      passive_listen_socket_(-1), data_socket_(-1), transfer_type_("A"), protection_level_("C"),
+      passive_listen_socket_(-1), data_socket_(-1), transfer_type_("A"), transfer_mode_("S"),
+      protection_level_("C"),
       active_mode_port_(0), active_mode_enabled_(false), resume_position_(0),
       virtual_host_manager_(vhost_manager), current_virtual_host_(nullptr), session_tracker_(session_tracker) {
     // User file path: from config (persistent storage) or default
@@ -148,9 +150,6 @@ void FTPConnection::start() {
 }
 
 void FTPConnection::stop() {
-    if (!active_) {
-        return;
-    }
     if (session_tracker_ && session_registered_) {
         std::string hostname = current_virtual_host_ ? current_virtual_host_->getHostname() : "";
         session_tracker_->unregisterSession(username_, hostname);
@@ -175,7 +174,11 @@ void FTPConnection::stop() {
         socket_ = -1;
     }
     if (client_thread_.joinable()) {
-        client_thread_.join();
+        if (client_thread_.get_id() != std::this_thread::get_id()) {
+            client_thread_.join();
+        } else {
+            client_thread_.detach();
+        }
     }
     logger_->info("FTP connection stopped");
 }
@@ -225,6 +228,10 @@ void FTPConnection::handleClient() {
             sendResponse("215 UNIX Type: L8");
         } else if (command == "FEAT") {
             sendResponse("211-Features:");
+            sendResponse(" SIZE");
+            sendResponse(" REST STREAM");
+            sendResponse(" PORT");
+            sendResponse(" EPRT");
             if (virtual_host_manager_ && !virtual_host_manager_->listVirtualHosts().empty()) {
                 sendResponse(" HOST");
             }
@@ -232,6 +239,9 @@ void FTPConnection::handleClient() {
                 sendResponse(" AUTH TLS");
                 sendResponse(" PBSZ");
                 sendResponse(" PROT");
+            }
+            if (compressionEnabled()) {
+                sendResponse(" MODE Z");
             }
             sendResponse("211 End");
         } else if (command == "AUTH") {
@@ -252,6 +262,12 @@ void FTPConnection::handleClient() {
                 handleLIST(argument);
             } else if (command == "PASV") {
                 handlePASV();
+            } else if (command == "PORT") {
+                handlePORT(argument);
+            } else if (command == "EPRT") {
+                handleEPRT(argument);
+            } else if (command == "MODE") {
+                handleMODE(argument);
             } else if (command == "TYPE") {
                 handleTYPE(argument);
             } else if (command == "SIZE") {
@@ -332,8 +348,11 @@ std::string FTPConnection::readLine() {
         }
         
         if (received <= 0) {
+            if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
             if (received == 0) {
-                // Connection closed
                 active_ = false;
             }
             break;
@@ -601,6 +620,82 @@ void FTPConnection::handlePORT(const std::string& address_port) {
     sendResponse("200 PORT command successful");
 }
 
+void FTPConnection::handleEPRT(const std::string& endpoint) {
+    // RFC 2428: EPRT <d><net-prt><d><net-addr><d><tcp-port><d>
+    if (endpoint.size() < 7) {
+        sendResponse("501 Invalid EPRT command format");
+        return;
+    }
+    const char delim = endpoint[0];
+    if (endpoint.back() != delim) {
+        sendResponse("501 Invalid EPRT command format");
+        return;
+    }
+    std::vector<std::string> fields;
+    std::string token;
+    for (size_t i = 1; i < endpoint.size(); ++i) {
+        if (endpoint[i] == delim) {
+            fields.push_back(token);
+            token.clear();
+        } else {
+            token.push_back(endpoint[i]);
+        }
+    }
+    if (fields.size() != 3) {
+        sendResponse("501 Invalid EPRT command format");
+        return;
+    }
+    if (fields[0] != "1") {
+        sendResponse("522 Network protocol not supported, use (1)");
+        return;
+    }
+    int port = 0;
+    try {
+        port = std::stoi(fields[2]);
+    } catch (...) {
+        sendResponse("501 Invalid EPRT port");
+        return;
+    }
+    if (port < 1024 || port > 65535) {
+        sendResponse("501 Invalid port number");
+        return;
+    }
+    closeDataSocket();
+    active_mode_ip_ = fields[1];
+    active_mode_port_ = port;
+    active_mode_enabled_ = true;
+    logger_->info("Active mode enabled (EPRT): " + active_mode_ip_ + ":" + std::to_string(active_mode_port_));
+    sendResponse("200 EPRT command successful");
+}
+
+bool FTPConnection::compressionEnabled() const {
+#ifdef ENABLE_COMPRESSION
+    return config_ && config_->transfer.enable_compression;
+#else
+    return false;
+#endif
+}
+
+void FTPConnection::handleMODE(const std::string& mode) {
+    std::string m = mode;
+    std::transform(m.begin(), m.end(), m.begin(), ::toupper);
+    if (m == "S" || m == "STREAM") {
+        transfer_mode_ = "S";
+        sendResponse("200 Mode set to Stream");
+        return;
+    }
+    if (m == "Z") {
+        if (!compressionEnabled()) {
+            sendResponse("504 MODE Z is not enabled");
+            return;
+        }
+        transfer_mode_ = "Z";
+        sendResponse("200 Mode set to Compressed (Z)");
+        return;
+    }
+    sendResponse("504 Command not implemented for that parameter");
+}
+
 void FTPConnection::handleTYPE(const std::string& type) {
     if (type == "A" || type == "I") {
         transfer_type_ = type;
@@ -638,6 +733,18 @@ void FTPConnection::handleRETR(const std::string& filename) {
         sendResponse("550 File not found");
         return;
     }
+
+    if (transferModeZ()) {
+        if (resume_position_ > 0) {
+            sendResponse("550 REST is not supported with MODE Z");
+            resume_position_ = 0;
+            return;
+        }
+        if (!compressionEnabled()) {
+            sendResponse("504 MODE Z is not enabled");
+            return;
+        }
+    }
     
     sendResponse("150 Opening " + transfer_type_ + " mode data connection");
     
@@ -653,6 +760,11 @@ void FTPConnection::handleRETR(const std::string& filename) {
     auto start_time = std::chrono::steady_clock::now();
     bool use_sendfile = config_->transfer.use_sendfile;
     bool use_mmap = config_->transfer.use_mmap;
+    const bool mode_z = transferModeZ();
+    if (mode_z) {
+        use_sendfile = false;
+        use_mmap = false;
+    }
 
 #if defined(_WIN32)
     use_sendfile = false;
@@ -700,6 +812,60 @@ void FTPConnection::handleRETR(const std::string& filename) {
     };
 
     bool transfer_ok = false;
+    if (mode_z) {
+        if (lseek(file_fd, offset, SEEK_SET) != static_cast<off_t>(offset)) {
+            close(file_fd);
+            close(data_fd);
+            sendResponse("550 Seek failed");
+            return;
+        }
+        ZlibStream stream(ZlibStream::Mode::Deflate);
+        if (!stream.valid()) {
+            close(file_fd);
+            close(data_fd);
+            sendResponse("426 Compression is not available");
+            return;
+        }
+        std::vector<char> buffer(buf_size);
+        remaining = file_size - offset;
+        bool ok = true;
+        while (remaining > 0) {
+            apply_throttle(total_bytes);
+            size_t to_read = std::min(buf_size, static_cast<size_t>(remaining));
+            ssize_t n = read(file_fd, buffer.data(), to_read);
+            if (n <= 0) {
+                ok = false;
+                break;
+            }
+            std::vector<uint8_t> compressed;
+            if (!stream.process(reinterpret_cast<const uint8_t*>(buffer.data()), static_cast<size_t>(n),
+                                compressed, false)) {
+                ok = false;
+                break;
+            }
+            if (!compressed.empty()) {
+                ssize_t sent = send(data_fd, compressed.data(), compressed.size(), 0);
+                if (sent <= 0 || static_cast<size_t>(sent) != compressed.size()) {
+                    ok = false;
+                    break;
+                }
+                total_bytes += static_cast<size_t>(sent);
+            }
+            remaining -= n;
+        }
+        if (ok) {
+            std::vector<uint8_t> compressed;
+            ok = stream.process(nullptr, 0, compressed, true);
+            if (ok && !compressed.empty()) {
+                ssize_t sent = send(data_fd, compressed.data(), compressed.size(), 0);
+                ok = (sent > 0 && static_cast<size_t>(sent) == compressed.size());
+                if (ok) {
+                    total_bytes += static_cast<size_t>(sent);
+                }
+            }
+        }
+        transfer_ok = ok;
+    }
 #if defined(__linux__)
     if (use_sendfile && remaining > 0) {
         while (remaining > 0) {
@@ -756,7 +922,7 @@ void FTPConnection::handleRETR(const std::string& filename) {
     }
 #endif
 
-    if (!transfer_ok) {
+    if (!transfer_ok && !mode_z) {
         // Fallback: read/send loop
         if (lseek(file_fd, offset, SEEK_SET) != static_cast<off_t>(offset)) {
             close(file_fd);
@@ -822,6 +988,19 @@ void FTPConnection::handleSTOR(const std::string& filename) {
             return;
         }
     }
+
+    if (transferModeZ()) {
+        if (resume_position_ > 0) {
+            sendResponse("550 REST is not supported with MODE Z");
+            resume_position_ = 0;
+            return;
+        }
+        if (!compressionEnabled()) {
+            sendResponse("504 MODE Z is not enabled");
+            return;
+        }
+    }
+
     sendResponse("150 Opening " + transfer_type_ + " mode data connection");
     
     // Accept data connection
@@ -863,33 +1042,82 @@ void FTPConnection::handleSTOR(const std::string& filename) {
     size_t total_bytes = 0;
     auto start_time = std::chrono::steady_clock::now();
     int max_rate = config_->rate_limit.max_transfer_rate;
-    
-    while (true) {
-        ssize_t received = recv(data_fd, buffer, sizeof(buffer), 0);
-        if (received <= 0) {
-            break; // Connection closed or error
+    bool upload_ok = true;
+
+    if (transferModeZ()) {
+        ZlibStream stream(ZlibStream::Mode::Inflate);
+        if (!stream.valid()) {
+            file.close();
+            close(data_fd);
+            sendResponse("426 Compression is not available");
+            return;
         }
-        
-        // Bandwidth throttling for uploads
-        if (max_rate > 0) {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-            if (elapsed > 0) {
-                size_t allowed_bytes = (max_rate * elapsed) / 1000;
-                if (total_bytes + received > allowed_bytes) {
-                    size_t delay_ms = ((total_bytes + received - allowed_bytes) * 1000) / max_rate;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+        while (true) {
+            ssize_t received = recv(data_fd, buffer, sizeof(buffer), 0);
+            if (received < 0) {
+                upload_ok = false;
+                break;
+            }
+            std::vector<uint8_t> plain;
+            if (!stream.process(reinterpret_cast<const uint8_t*>(buffer),
+                                received > 0 ? static_cast<size_t>(received) : 0,
+                                plain, received == 0)) {
+                upload_ok = false;
+                break;
+            }
+            if (!plain.empty()) {
+                file.write(reinterpret_cast<const char*>(plain.data()),
+                           static_cast<std::streamsize>(plain.size()));
+                total_bytes += plain.size();
+            }
+            if (received == 0) {
+                break;
+            }
+            if (max_rate > 0) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
+                if (elapsed > 0) {
+                    size_t allowed_bytes = (max_rate * elapsed) / 1000;
+                    if (total_bytes > allowed_bytes) {
+                        size_t delay_ms = ((total_bytes - allowed_bytes) * 1000) / max_rate;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                    }
                 }
             }
         }
-        
-        file.write(buffer, received);
-        total_bytes += received;
+    } else {
+        while (true) {
+            ssize_t received = recv(data_fd, buffer, sizeof(buffer), 0);
+            if (received <= 0) {
+                break; // Connection closed or error
+            }
+            
+            // Bandwidth throttling for uploads
+            if (max_rate > 0) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
+                if (elapsed > 0) {
+                    size_t allowed_bytes = (max_rate * elapsed) / 1000;
+                    if (total_bytes + received > allowed_bytes) {
+                        size_t delay_ms = ((total_bytes + received - allowed_bytes) * 1000) / max_rate;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                    }
+                }
+            }
+            
+            file.write(buffer, received);
+            total_bytes += received;
+        }
     }
-    
+
     file.close();
     close(data_fd);
     resume_position_ = 0; // Reset resume position after transfer
+    if (!upload_ok) {
+        logger_->error("Compressed upload failed: " + filename);
+        sendResponse("426 Transfer aborted");
+        return;
+    }
     logger_->info("File upload complete: " + filename + " (" + std::to_string(total_bytes) + " bytes)");
     logger_->info("[AUDIT] FILE_UPLOAD user=" + username_ + " file=" + filename + " size=" + std::to_string(total_bytes));
     sendResponse("226 Transfer complete");
@@ -1364,6 +1592,10 @@ void FTPConnection::applyChroot() {
 }
 
 void FTPConnection::handleREST(const std::string& position) {
+    if (transferModeZ()) {
+        sendResponse("550 REST is not supported with MODE Z");
+        return;
+    }
     try {
         resume_position_ = std::stoull(position);
         sendResponse("350 Restarting at " + position + ". Send STOR or RETR to initiate transfer");
@@ -1383,6 +1615,11 @@ void FTPConnection::handleAPPE(const std::string& filename) {
     
     if (!validatePath(filepath)) {
         sendResponse("550 Invalid path");
+        return;
+    }
+
+    if (transferModeZ()) {
+        sendResponse("550 APPE is not supported with MODE Z");
         return;
     }
     

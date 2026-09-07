@@ -52,6 +52,25 @@ TEST_F(CompressionTest, GzipCompressDecompressRoundTrip) {
     std::string result(decompressed.begin(), decompressed.end());
     EXPECT_EQ(result, plain);
 }
+
+TEST_F(CompressionTest, ZlibStreamRoundTrip) {
+    std::string plain = "MODE Z streaming zlib round-trip payload for simple-sftpd.";
+    ZlibStream deflate(ZlibStream::Mode::Deflate);
+    ZlibStream inflate(ZlibStream::Mode::Inflate);
+    ASSERT_TRUE(deflate.valid());
+    ASSERT_TRUE(inflate.valid());
+    std::vector<uint8_t> compressed;
+    ASSERT_TRUE(deflate.process(reinterpret_cast<const uint8_t*>(plain.data()), plain.size(),
+                                compressed, false));
+    std::vector<uint8_t> tail;
+    ASSERT_TRUE(deflate.process(nullptr, 0, tail, true));
+    compressed.insert(compressed.end(), tail.begin(), tail.end());
+    EXPECT_FALSE(compressed.empty());
+    std::vector<uint8_t> out;
+    ASSERT_TRUE(inflate.process(compressed.data(), compressed.size(), out, true));
+    std::string result(out.begin(), out.end());
+    EXPECT_EQ(result, plain);
+}
 #endif
 
 TEST_F(CompressionTest, EmptyInputCompress) {

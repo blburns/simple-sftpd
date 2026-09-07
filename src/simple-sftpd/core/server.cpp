@@ -136,6 +136,14 @@ bool FTPServer::start() {
         server_socket_ = -1;
         return false;
     }
+
+    struct sockaddr_in bound{};
+    socklen_t bound_len = sizeof(bound);
+    if (getsockname(server_socket_, (struct sockaddr*)&bound, &bound_len) == 0) {
+        listen_port_ = ntohs(bound.sin_port);
+    } else {
+        listen_port_ = config_->connection.bind_port;
+    }
     
     // Listen
     if (listen(server_socket_, config_->connection.max_connections) < 0) {
@@ -160,7 +168,7 @@ bool FTPServer::start() {
     server_thread_ = std::thread(&FTPServer::serverLoop, this);
     
     logger_->info("FTP Server started on " + config_->connection.bind_address + 
-                  ":" + std::to_string(config_->connection.bind_port));
+                  ":" + std::to_string(listen_port_));
     return true;
 }
 
@@ -252,6 +260,10 @@ void FTPServer::serverLoop() {
 }
 
 void FTPServer::handleConnection(int client_socket) {
+    int flags = fcntl(client_socket, F_GETFL, 0);
+    if (flags >= 0) {
+        fcntl(client_socket, F_SETFL, flags & ~O_NONBLOCK);
+    }
     auto connection = std::make_shared<FTPConnection>(client_socket, logger_, config_, virtual_host_manager_, session_tracker_);
     connection_manager_->addConnection(connection);
     connection->start();

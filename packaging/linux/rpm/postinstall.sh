@@ -1,25 +1,36 @@
-#!/bin/bash
-# Post-installation script for simple-sftpd RPM
+#!/bin/sh
+# Post-install for simple-sftpd RPM (CPack). Own data/log dirs; do not start.
 
 set -e
 
-SERVICE=simple-sftpd
-SERVICE_USER=simple-sftpd
-SERVICE_GROUP=simple-sftpd
+PROJECT_NAME="simple-sftpd"
+SERVICE_USER="simple-sftpd"
+CONFIG_DIR="/etc/$PROJECT_NAME"
+DATA_DIR="/var/lib/$PROJECT_NAME"
+LOG_DIR="/var/log/$PROJECT_NAME"
+FTP_ROOT="/var/ftp"
 
-if ! getent passwd "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home-dir /var/lib/simple-sftpd --shell /sbin/nologin \
-        --comment "Simple Secure FTP Daemon" "$SERVICE_USER"
+mkdir -p "$CONFIG_DIR/tls" "$DATA_DIR" "$LOG_DIR" "$FTP_ROOT"
+chown root:"$SERVICE_USER" "$CONFIG_DIR" "$CONFIG_DIR/tls" 2>/dev/null || true
+chmod 0750 "$CONFIG_DIR" "$CONFIG_DIR/tls" 2>/dev/null || true
+chown "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR" "$LOG_DIR" "$FTP_ROOT" 2>/dev/null || true
+chmod 0750 "$DATA_DIR" "$LOG_DIR" 2>/dev/null || true
+chmod 0755 "$FTP_ROOT" 2>/dev/null || true
+
+if [ ! -f "$CONFIG_DIR/$PROJECT_NAME.conf" ] && [ -f "$CONFIG_DIR/templates/production.conf" ]; then
+    cp "$CONFIG_DIR/templates/production.conf" "$CONFIG_DIR/$PROJECT_NAME.conf"
+    chown root:"$SERVICE_USER" "$CONFIG_DIR/$PROJECT_NAME.conf"
+    chmod 0640 "$CONFIG_DIR/$PROJECT_NAME.conf"
+elif [ -f "$CONFIG_DIR/$PROJECT_NAME.conf" ]; then
+    chown root:"$SERVICE_USER" "$CONFIG_DIR/$PROJECT_NAME.conf" 2>/dev/null || true
+    chmod 0640 "$CONFIG_DIR/$PROJECT_NAME.conf" 2>/dev/null || true
 fi
 
-mkdir -p /var/ftp /var/log/simple-sftpd /var/lib/simple-sftpd
-chown "$SERVICE_USER:$SERVICE_GROUP" /var/ftp /var/log/simple-sftpd /var/lib/simple-sftpd
-chmod 755 /etc/simple-sftpd 2>/dev/null || true
-
+if command -v systemd-tmpfiles >/dev/null 2>&1; then
+    systemd-tmpfiles --create "/usr/lib/tmpfiles.d/$PROJECT_NAME.conf" >/dev/null 2>&1 || true
+fi
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl daemon-reload
-    systemctl enable "${SERVICE}.service" || true
-    systemctl try-restart "${SERVICE}.service" || true
+    systemctl daemon-reload >/dev/null 2>&1 || true
 fi
 
 exit 0

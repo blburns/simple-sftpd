@@ -1,0 +1,1 @@
+u simple-sftpd - "simple-sftpd service user" /var/lib/simple-sftpd /usr/sbin/nologin

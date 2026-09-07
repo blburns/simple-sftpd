@@ -1,18 +1,15 @@
 #!/bin/sh
+# Pre-removal for simple-sftpd
+
 set -e
 
-SERVICE=simple-sftpd
+PROJECT_NAME="simple-sftpd"
 
-case "$1" in
-    remove|deconfigure)
-        if command -v deb-systemd-helper >/dev/null 2>&1; then
-            deb-systemd-helper stop "${SERVICE}.service" || true
-            deb-systemd-helper disable "${SERVICE}.service" || true
-        elif command -v systemctl >/dev/null 2>&1; then
-            systemctl stop "${SERVICE}.service" 2>/dev/null || true
-            systemctl disable "${SERVICE}.service" 2>/dev/null || true
-        fi
-        ;;
-esac
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop "$PROJECT_NAME" >/dev/null 2>&1 || true
+        systemctl disable "$PROJECT_NAME" >/dev/null 2>&1 || true
+    fi
+fi
 
 exit 0

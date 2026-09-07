@@ -182,3 +182,14 @@ TEST_F(FTPServerConfigTest, ErrorsAndWarnings) {
     EXPECT_TRUE(config_->getErrors().empty());
 }
 
+TEST_F(FTPServerConfigTest, EnableCompressionTransferSection) {
+    createTestConfig(
+        "[transfer]\n"
+        "enable_compression = true\n"
+        "buffer_size = 4096\n"
+    );
+    ASSERT_TRUE(config_->loadFromFile(test_config_file_));
+    EXPECT_TRUE(config_->transfer.enable_compression);
+    EXPECT_EQ(config_->transfer.buffer_size, static_cast<size_t>(4096));
+}
+

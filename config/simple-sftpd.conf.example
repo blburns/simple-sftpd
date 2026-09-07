@@ -96,6 +96,7 @@ temp_directory = "/tmp/simple-sftpd"
 buffer_size = 8192
 use_sendfile = true
 use_mmap = false
+enable_compression = false
 allowed_extensions = ["txt", "pdf", "doc", "docx", "jpg", "png", "gif"]
 denied_extensions = ["exe", "bat", "sh", "com"]
 

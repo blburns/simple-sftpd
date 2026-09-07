@@ -1,14 +1,10 @@
-#!/bin/bash
-# Post-uninstallation script for simple-sftpd RPM
+#!/bin/sh
+# Post-uninstall for simple-sftpd RPM
 
 set -e
 
-SERVICE=simple-sftpd
-
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl stop "${SERVICE}.service" 2>/dev/null || true
-    systemctl disable "${SERVICE}.service" 2>/dev/null || true
-    systemctl daemon-reload
+    systemctl daemon-reload >/dev/null 2>&1 || true
 fi
 
 exit 0
