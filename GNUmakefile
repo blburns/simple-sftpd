@@ -15,7 +15,11 @@
 
 # Variables
 PROJECT_NAME = simple-sftpd
-VERSION = 0.3.0
+# Single source of truth: project(... VERSION ...) in CMakeLists.txt
+VERSION := $(shell grep -oE 'VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt | head -1 | cut -d' ' -f2)
+ifeq ($(strip $(VERSION)),)
+$(error Could not read project VERSION from CMakeLists.txt)
+endif
 BUILD_DIR = build
 DIST_DIR = dist
 PACKAGE_DIR = packaging
@@ -182,65 +186,84 @@ else
 endif
 
 # Generic package target (platform-specific)
-package: build
+# CPack recipes — ifeq must be at parse time (not inside define/recipe expansion)
 ifeq ($(PLATFORM),macos)
-	@echo "Building macOS packages..."
-	@mkdir -p $(DIST_DIR)
-	@set -e; built=0; \
-	echo "Building PKG package..."; \
-	cd $(BUILD_DIR) && cpack -G productbuild && mv $(PROJECT_NAME)-*.pkg ../$(DIST_DIR)/; \
-	built=1; \
-	if [ -f assets/DS_Store ] && [ -f assets/dmg_background.png ]; then \
-		echo "Building DMG package..."; \
-		cd $(BUILD_DIR) && cpack -G DragNDrop && mv $(PROJECT_NAME)-*.dmg ../$(DIST_DIR)/; \
-	else \
-		echo "Skipping DMG (add assets/DS_Store and assets/dmg_background.png for branded DMG)"; \
-	fi; \
-	if [ "$$built" -eq 0 ]; then exit 1; fi
-	@echo "macOS packages created in $(DIST_DIR)/"
+CPACK_PACKAGES_CMD = \
+	@mkdir -p $(DIST_DIR) && \
+	echo "Building macOS packages..." && \
+	( cd $(BUILD_DIR) && cpack -G DragNDrop ) || echo "  Warning: DMG generation failed" && \
+	( cd $(BUILD_DIR) && cpack -G productbuild ) || echo "  Warning: PKG generation failed" && \
+	( packaging/macos/pkg/rebuild-from-cpack.sh $(PROJECT_NAME) $(VERSION) $(BUILD_DIR) ) || \
+	  echo "  Warning: PKG rebuild failed" && \
+	echo "Moving packages to $(DIST_DIR)..." && \
+	( ls $(BUILD_DIR)/$(PROJECT_NAME)-*.dmg 1>/dev/null 2>&1 && \
+	  mv $(BUILD_DIR)/$(PROJECT_NAME)-*.dmg $(DIST_DIR)/ && echo "  DMG package moved" ) || \
+	  echo "  Warning: No DMG package found" && \
+	( ls $(BUILD_DIR)/$(PROJECT_NAME)-*.pkg 1>/dev/null 2>&1 && \
+	  mv $(BUILD_DIR)/$(PROJECT_NAME)-*.pkg $(DIST_DIR)/ && echo "  PKG package moved" ) || \
+	  echo "  Warning: No PKG package found" && \
+	found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-*.dmg $(DIST_DIR)/$(PROJECT_NAME)-*.pkg; do \
+	  if [ -f "$$f" ]; then ls -lh "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "  No packages found in $(DIST_DIR)"
 else ifeq ($(PLATFORM),linux)
-	@echo "Building Linux packages..."
-	@mkdir -p $(DIST_DIR)
-	@set -e; built=0; \
+CPACK_PACKAGES_CMD = \
+	@mkdir -p $(DIST_DIR) && \
+	echo "Building Linux packages..." && \
 	if command -v rpmbuild >/dev/null 2>&1; then \
-		echo "Building RPM package..."; \
-		cd $(BUILD_DIR) && cpack -G RPM && mv $(PROJECT_NAME)-*.rpm ../$(DIST_DIR)/; \
-		built=1; \
+		echo "  Building RPM..." && \
+		( cd $(BUILD_DIR) && cpack -G RPM ) && \
+		mv $(BUILD_DIR)/$(PROJECT_NAME)-*.rpm $(DIST_DIR)/ && \
+		echo "  RPM package created"; \
 	else \
-		echo "Skipping RPM (rpmbuild not found; install rpm-build on RHEL/Fedora)"; \
-	fi; \
-	if command -v dpkg >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then \
-		echo "Building DEB package..."; \
-		cd $(BUILD_DIR) && cpack -G DEB && mv $(PROJECT_NAME)-*.deb ../$(DIST_DIR)/; \
-		built=1; \
+		echo "  Skipping RPM (rpmbuild not available)"; \
+	fi && \
+	if command -v dpkg-deb >/dev/null 2>&1; then \
+		echo "  Building DEB..." && \
+		( cd $(BUILD_DIR) && cpack -G DEB ) && \
+		mv $(BUILD_DIR)/$(PROJECT_NAME)-*.deb $(DIST_DIR)/ && \
+		echo "  DEB package created"; \
 	else \
-		echo "Skipping DEB (dpkg/dpkg-deb not found; install dpkg-dev on Debian/Ubuntu)"; \
-	fi; \
-	if [ "$$built" -eq 0 ]; then \
-		echo "Error: no packaging tools found. Run 'make deps' or use 'make package-deb' / 'make package-rpm'."; \
-		exit 1; \
-	fi
-	@echo "Linux packages created in $(DIST_DIR)/"
+		echo "  Skipping DEB (dpkg-deb not available)"; \
+	fi && \
+	found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-*.deb $(DIST_DIR)/$(PROJECT_NAME)-*.rpm; do \
+	  if [ -f "$$f" ]; then ls -lh "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "  No packages found in $(DIST_DIR)"
 else ifeq ($(PLATFORM),freebsd)
-	@echo "Building FreeBSD packages..."
-	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G TGZ && mv $(PROJECT_NAME)-*.tar.gz ../$(DIST_DIR)/
-	@if ! ls $(DIST_DIR)/$(PROJECT_NAME)-*.tar.gz >/dev/null 2>&1; then \
-		echo "Error: TGZ package not created. Re-run 'cd build && cmake ..' then 'make package'."; \
-		exit 1; \
-	fi
-	@echo "FreeBSD package created in $(DIST_DIR)/"
+CPACK_PACKAGES_CMD = \
+	@mkdir -p $(DIST_DIR) && \
+	echo "Building FreeBSD packages..." && \
+	( cd $(BUILD_DIR) && cpack -G FREEBSD ) && \
+	( ls $(BUILD_DIR)/*.pkg 1>/dev/null 2>&1 && mv $(BUILD_DIR)/*.pkg $(DIST_DIR)/ && \
+	  echo "  FreeBSD package created" ) || echo "  Warning: No FreeBSD package found" && \
+	found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-*.pkg; do \
+	  if [ -f "$$f" ]; then ls -lh "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "  No packages found in $(DIST_DIR)"
 else ifeq ($(PLATFORM),windows)
-	@echo "Building Windows packages..."
-	@$(MKDIR) $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G WIX
-	cd $(BUILD_DIR) && cpack -G ZIP
-	$(CP) $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.msi $(DIST_DIR)/ 2>/dev/null || true
-	$(CP) $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.zip $(DIST_DIR)/ 2>/dev/null || true
-	@echo "Windows packages created: MSI and ZIP"
+CPACK_PACKAGES_CMD = \
+	@$(MKDIR) $(DIST_DIR) && \
+	echo "Building Windows packages..." && \
+	( cd $(BUILD_DIR) && cpack -G WIX ) && \
+	( cd $(BUILD_DIR) && cpack -G ZIP ) && \
+	$(CP) $(BUILD_DIR)/$(PROJECT_NAME)-*.msi $(DIST_DIR)/ 2>/dev/null || true && \
+	$(CP) $(BUILD_DIR)/$(PROJECT_NAME)-*.zip $(DIST_DIR)/ 2>/dev/null || true && \
+	echo "Windows packages created: MSI and ZIP" && \
+	found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-*.msi $(DIST_DIR)/$(PROJECT_NAME)-*.zip; do \
+	  if [ -f "$$f" ]; then ls -lh "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "  No packages found in $(DIST_DIR)"
 else
-	@echo "Package generation not supported on this platform"
+CPACK_PACKAGES_CMD = @echo "Package generation not supported on this platform"
 endif
+
+package: build
+	$(CPACK_PACKAGES_CMD)
 
 # Development targets
 dev-build: $(BUILD_DIR)-dir
@@ -751,27 +774,56 @@ else
 		deployment \
 		config \
 		scripts
-	@echo "Creating ZIP source package..."
-	zip -r $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.zip \
-		$(SRC_DIR) \
-		$(INCLUDE_DIR) \
-		CMakeLists.txt \
-		Makefile \
-		README.md \
-		LICENSE \
-		deployment \
-		config \
-		scripts
+	@if command -v zip >/dev/null 2>&1; then \
+		zip -r $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.zip \
+			$(SRC_DIR) \
+			$(INCLUDE_DIR) \
+			CMakeLists.txt \
+			Makefile \
+			README.md \
+			LICENSE \
+			deployment \
+			config \
+			scripts; \
+	elif tar -a -cf $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.zip \
+			$(SRC_DIR) \
+			$(INCLUDE_DIR) \
+			CMakeLists.txt \
+			Makefile \
+			README.md \
+			LICENSE \
+			deployment \
+			config \
+			scripts; then \
+		echo "Created ZIP with tar"; \
+	else \
+		rm -f $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.zip; \
+		echo "Skipping ZIP (install zip to produce $(PROJECT_NAME)-$(VERSION)-src.zip)"; \
+	fi
 endif
-	@echo "Source packages created: TAR.GZ and ZIP"
+	@echo "Source packages created"
 
 # Package all formats (binary + source)
 package-all: package package-source
 	@echo "All packages created successfully"
 	@echo "Binary packages:"
-	@ls -la $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.* 2>/dev/null || echo "No binary packages found"
+	@found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.deb \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.rpm \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.msi \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.exe; do \
+	  if [ -f "$$f" ]; then ls -la "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "No binary packages found"
 	@echo "Source packages:"
-	@ls -la $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.* 2>/dev/null || echo "No source packages found"
+	@found=0; \
+	for f in $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.tar.gz \
+	         $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-src.zip; do \
+	  if [ -f "$$f" ]; then ls -la "$$f"; found=1; fi; \
+	done; \
+	[ "$$found" -eq 1 ] || echo "No source packages found"
 
 # Individual package targets for each format
 package-deb: build
@@ -826,14 +878,11 @@ endif
 
 package-dmg: build
 ifeq ($(PLATFORM),macos)
-	@if [ ! -f assets/DS_Store ] || [ ! -f assets/dmg_background.png ]; then \
-		echo "Error: DMG branding assets missing (assets/DS_Store, assets/dmg_background.png)"; \
-		exit 1; \
-	fi
 	@echo "Building DMG package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G DragNDrop && mv $(PROJECT_NAME)-*.dmg ../$(DIST_DIR)/
-	@echo "DMG package created in $(DIST_DIR)/"
+	cd $(BUILD_DIR) && cpack -G DragNDrop
+	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg $(DIST_DIR)/
+	@echo "DMG package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.dmg"
 else
 	@echo "DMG packages are only supported on macOS"
 endif
@@ -842,8 +891,10 @@ package-pkg: build
 ifeq ($(PLATFORM),macos)
 	@echo "Building PKG package..."
 	@mkdir -p $(DIST_DIR)
-	cd $(BUILD_DIR) && cpack -G productbuild && mv $(PROJECT_NAME)-*.pkg ../$(DIST_DIR)/
-	@echo "PKG package created in $(DIST_DIR)/"
+	cd $(BUILD_DIR) && cpack -G productbuild
+	packaging/macos/pkg/rebuild-from-cpack.sh $(PROJECT_NAME) $(VERSION) $(BUILD_DIR)
+	mv $(BUILD_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg $(DIST_DIR)/
+	@echo "PKG package created: $(DIST_DIR)/$(PROJECT_NAME)-$(VERSION)-*.pkg"
 else
 	@echo "PKG packages are only supported on macOS"
 endif

@@ -4,7 +4,7 @@
 
 GMMAKE ?= gmake
 PROJECT_NAME = simple-sftpd
-VERSION = 0.3.0
+VERSION = 0.4.0
 
 # Common entry points
 all build clean install uninstall test package deps dev-deps help help-all \
